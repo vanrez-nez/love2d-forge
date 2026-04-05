@@ -1,0 +1,79 @@
+{
+  "name": "love2d-hot-reload",
+  "displayName": "Love2D Hot Reload",
+  "description": "Hot reload for Love2D projects with zero mandatory modifications.",
+  "version": "0.1.0",
+  "publisher": "vanrez",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:main.lua"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "love2d.launch",
+        "title": "Love2D: Run Game"
+      },
+      {
+        "command": "love2d.stop",
+        "title": "Love2D: Stop Game"
+      },
+      {
+        "command": "love2d.enableHotReload",
+        "title": "Love2D: Enable Hot Reload"
+      },
+      {
+        "command": "love2d.disableHotReload",
+        "title": "Love2D: Disable Hot Reload"
+      },
+      {
+        "command": "love2d.reload",
+        "title": "Love2D: Reload"
+      }
+    ],
+    "configuration": {
+      "title": "Love2D Hot Reload",
+      "properties": {
+        "love2d.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to love executable. Empty = auto-detect."
+        },
+        "love2d.reloadDebounce": {
+          "type": "number",
+          "default": 300,
+          "description": "Milliseconds to wait after save before acting."
+        },
+        "love2d.hotPollInterval": {
+          "type": "number",
+          "default": 300,
+          "description": "Milliseconds between mtime checks inside hot.lua."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/vscode": "^1.110.0",
+    "@vscode/vsce": "^3.7.1",
+    "typescript": "^6.0.2"
+  }
+}

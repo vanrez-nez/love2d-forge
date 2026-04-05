@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build Output
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# System
+.DS_Store
+Thumbs.db
+
+# Misc
+.vscode-test/
+*.vsix
