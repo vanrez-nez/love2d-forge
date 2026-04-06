@@ -10,6 +10,10 @@ end
 local project_path = rawget(_G, "__LOVE2D_PROJECT_PATH") or "."
 local port_file = rawget(_G, "__LOVE2D_BRIDGE_PORT_FILE") or (project_path .. "/.love2d-hot-port")
 local startup_error_file = rawget(_G, "__LOVE2D_STARTUP_ERROR_FILE")
+local proxy_error_logs = rawget(_G, "__LOVE2D_PROXY_ERROR_LOGS")
+if proxy_error_logs == nil then
+    proxy_error_logs = true
+end
 local server = nil
 local client = nil
 local original_print = print
@@ -20,6 +24,7 @@ local send_line
 local encode_json
 local emit_log_line
 local wrapped_callbacks = {}
+local callback_guards_installed = false
 
 function emit_log_line(message, flush)
     if not client then
@@ -323,44 +328,72 @@ local function wrap_callback(name)
 end
 
 local function wrap_callbacks()
+    if callback_guards_installed then
+        return
+    end
+
     for _, callback_name in ipairs({
         "load",
         "update",
         "draw",
-        "displayrotated",
-        "filedropped",
-        "directorydropped",
-        "dropcomplete",
         "keypressed",
         "keyreleased",
-        "joystickadded",
-        "joystickaxis",
-        "joystickhat",
-        "joystickpressed",
-        "joystickreleased",
-        "joystickremoved",
-        "gamepadaxis",
-        "gamepadpressed",
-        "gamepadreleased",
+        "textinput",
+        "textedited",
+        "mousemoved",
         "mousepressed",
         "mousereleased",
-        "mousemoved",
         "wheelmoved",
         "touchpressed",
         "touchreleased",
         "touchmoved",
-        "textinput",
-        "textedited",
-        "resize",
+        "joystickpressed",
+        "joystickreleased",
+        "joystickaxis",
+        "joystickhat",
+        "gamepadpressed",
+        "gamepadreleased",
+        "gamepadaxis",
+        "joystickadded",
+        "joystickremoved",
+        "joysticksensorupdated",
         "visible",
         "focus",
+        "mousefocus",
+        "exposed",
+        "occluded",
+        "threaderror",
+        "resize",
+        "filedropped",
+        "directorydropped",
+        "dropbegan",
+        "dropmoved",
+        "dropcompleted",
         "lowmemory",
+        "displayrotated",
+        "localechanged",
+        "audiodisconnected",
+        "sensorupdated",
+        "themechanged",
         "quit",
-        "threaderror"
     }) do
         wrap_callback(callback_name)
     end
+    callback_guards_installed = true
     log("callback guards installed")
+end
+
+local function log_proxy_error_mode()
+    if proxy_error_logs then
+        if callback_guards_installed then
+            log("proxyErrorLogs enabled; runtime callback errors will be proxied")
+        else
+            log("proxyErrorLogs enabled; callback guards are available but not installed")
+        end
+        return
+    end
+
+    log("proxyErrorLogs disabled; runtime callback errors will use native Love handling only")
 end
 
 local function start_server()
@@ -393,6 +426,7 @@ local function bridge_update()
             accepted:settimeout(0)
             client = accepted
             log("bridge client connected")
+            log_proxy_error_mode()
         end
     end
 
@@ -432,6 +466,12 @@ if original_run then
             return result
         end
     end
+end
+
+if proxy_error_logs then
+    log("proxyErrorLogs enabled")
+else
+    log("proxyErrorLogs disabled")
 end
 
 log("bridge active via love.run hook")

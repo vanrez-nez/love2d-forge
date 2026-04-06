@@ -26,6 +26,10 @@
       {
         "command": "love2d.reload",
         "title": "Love2D: Restart Game"
+      },
+      {
+        "command": "love2d.initConfig",
+        "title": "Love2D: Init Config"
       }
     ],
     "configuration": {

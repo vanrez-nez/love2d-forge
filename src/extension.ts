@@ -5,15 +5,25 @@ import { FileWatcher } from './watcher';
 import { StatusBarController, ExtensionState } from './statusBar';
 import { Logger } from './logger';
 import { classifyReloadEvent, ReloadEvent } from './reloadPolicy';
+import { FileLogStore } from './fileLogStore';
+import { initializeProjectConfig, readProjectConfig, resolveFileLogPath } from './projectConfig';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot) {
         return;
     }
 
-    const processManager = new ProcessManager();
-    const logger = new Logger(processManager.getOutputChannel(), '[love2d]');
+    const projectConfig = await readProjectConfig(workspaceRoot);
+    const fileLogStore = projectConfig.fileLogs.enabled
+        ? new FileLogStore(
+            resolveFileLogPath(workspaceRoot, projectConfig.fileLogs.outputFile),
+            projectConfig.fileLogs.logLines
+        )
+        : null;
+    await fileLogStore?.initialize();
+    const processManager = new ProcessManager(fileLogStore);
+    const logger = new Logger(processManager.getOutputChannel(), '[love2d]', fileLogStore);
     const activationLogger = logger.child('extension');
     const reloadLogger = logger.child('reload');
     const bootstrapManager = new BootstrapManager(workspaceRoot, context.extensionPath, logger.child('bootstrap'));
@@ -25,8 +35,8 @@ export function activate(context: vscode.ExtensionContext) {
         const executablePath = config.get<string>('executablePath') || '';
         const hotPollInterval = config.get<number>('hotPollInterval') || 500;
         // Rebuild bootstrap on every launch so new/deleted project files are reflected
-        activationLogger.log(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval}`);
-        const bootstrapDir = bootstrapManager.prepare(hotPollInterval);
+        activationLogger.log(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval} proxyErrorLogs=${projectConfig.proxyErrorLogs}`);
+        const bootstrapDir = bootstrapManager.prepare(hotPollInterval, projectConfig.proxyErrorLogs);
         const success = await processManager.launch(bootstrapDir, workspaceRoot, executablePath, reason);
         if (success) {
             statusBar.update(ExtensionState.Running);
@@ -82,10 +92,19 @@ export function activate(context: vscode.ExtensionContext) {
         void handleReloadEvent(event);
     });
 
+    const initConfig = async () => {
+        const configPath = await initializeProjectConfig(workspaceRoot);
+        const document = await vscode.workspace.openTextDocument(configPath);
+        await vscode.window.showTextDocument(document);
+        activationLogger.log(`initialized project config at "${configPath}"`);
+    };
+
     context.subscriptions.push(
         vscode.commands.registerCommand('love2d.launch', () => launch('manual command: love2d.launch')),
         vscode.commands.registerCommand('love2d.stop', stop),
         vscode.commands.registerCommand('love2d.reload', () => launch('manual command: love2d.reload')),
+        vscode.commands.registerCommand('love2d.initConfig', initConfig),
+        { dispose: () => { void fileLogStore?.flush(); } },
         processManager,
         statusBar,
         watcher

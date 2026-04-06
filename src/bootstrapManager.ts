@@ -14,8 +14,8 @@ export class BootstrapManager {
         this.startupErrorFile = getStartupErrorFile(workspaceRoot);
     }
 
-    public prepare(hotPollIntervalMs: number): string {
-        this.logger.log(`bootstrap prepare start: dir="${this.bootstrapDir}" hotPollIntervalMs=${hotPollIntervalMs}`);
+    public prepare(hotPollIntervalMs: number, proxyErrorLogs: boolean): string {
+        this.logger.log(`bootstrap prepare start: dir="${this.bootstrapDir}" hotPollIntervalMs=${hotPollIntervalMs} proxyErrorLogs=${proxyErrorLogs}`);
         fs.mkdirSync(this.bootstrapDir, { recursive: true });
 
         const projectPath = this.workspaceRoot.replace(/\\/g, '/');
@@ -36,6 +36,7 @@ export class BootstrapManager {
                 .replace('__PROJECT_PATH__', projectPath)
                 .replace('__BRIDGE_PORT_FILE__', this.bridgePortFile.replace(/\\/g, '/'))
                 .replace('__STARTUP_ERROR_FILE__', this.startupErrorFile.replace(/\\/g, '/'))
+                .replace('__PROXY_ERROR_LOGS__', proxyErrorLogs ? 'true' : 'false')
                 .replace('__HOT_POLL_INTERVAL_SECONDS__', hotPollIntervalSeconds.toFixed(3))
         );
 

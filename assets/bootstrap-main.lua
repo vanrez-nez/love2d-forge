@@ -5,6 +5,7 @@ local PROJECT = "__PROJECT_PATH__"
 local BRIDGE_PORT_FILE = "__BRIDGE_PORT_FILE__"
 local STARTUP_ERROR_FILE = "__STARTUP_ERROR_FILE__"
 local HOT_POLL_INTERVAL = __HOT_POLL_INTERVAL_SECONDS__
+local PROXY_ERROR_LOGS = __PROXY_ERROR_LOGS__
 
 -- Extend package.path so require() finds user modules via the real OS path too
 package.path = PROJECT .. "/?.lua;" .. PROJECT .. "/?/init.lua;" .. package.path
@@ -23,6 +24,7 @@ _G.__LOVE2D_HOT_POLL_INTERVAL = HOT_POLL_INTERVAL
 _G.__LOVE2D_PROJECT_PATH = PROJECT
 _G.__LOVE2D_BRIDGE_PORT_FILE = BRIDGE_PORT_FILE
 _G.__LOVE2D_STARTUP_ERROR_FILE = STARTUP_ERROR_FILE
+_G.__LOVE2D_PROXY_ERROR_LOGS = PROXY_ERROR_LOGS
 local hot_ok, hot_err = xpcall(function()
     require("__hot__")
 end, function(message)
@@ -45,6 +47,6 @@ if not ok then
     error("[love2d] Error while running main.lua:\n" .. tostring(runtime_err), 0)
 end
 
-if type(_G.__LOVE2D_WRAP_CALLBACKS) == "function" then
+if PROXY_ERROR_LOGS and type(_G.__LOVE2D_WRAP_CALLBACKS) == "function" then
     _G.__LOVE2D_WRAP_CALLBACKS()
 end

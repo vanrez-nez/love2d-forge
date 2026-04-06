@@ -4,10 +4,12 @@ import * as fs from 'fs';
 import { Logger } from './logger';
 import { BridgeClient } from './bridgeClient';
 import { getBridgePortFile, getStartupErrorFile } from './runtimePaths';
+import { FileLogStore } from './fileLogStore';
 
 export class ProcessManager {
     private process: childProcess.ChildProcess | null = null;
     private outputChannel: vscode.OutputChannel;
+    private rootLogger: Logger;
     private logger: Logger;
     private bridgeClient: BridgeClient;
     private readonly versionCache = new Map<string, string | null>();
@@ -18,12 +20,14 @@ export class ProcessManager {
     private startupErrorFile: string | null = null;
     private lastBridgePort: number | null = null;
     private startupErrorDelivered = false;
+    private outputPartialLine = false;
     public onCrash: (() => void) | null = null;
 
-    constructor() {
+    constructor(private readonly fileLogStore?: FileLogStore | null) {
         this.outputChannel = vscode.window.createOutputChannel('Love2D');
-        this.logger = new Logger(this.outputChannel, '[love2d]').child('process');
-        this.bridgeClient = new BridgeClient(new Logger(this.outputChannel, '[love2d]').child('bridge'));
+        this.rootLogger = new Logger(this.outputChannel, '[love2d]', this.fileLogStore);
+        this.logger = this.rootLogger.child('process');
+        this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'));
     }
 
     public async launch(bootstrapDir: string, workspaceRoot: string, executablePath: string, reason: string): Promise<boolean> {
@@ -56,13 +60,14 @@ export class ProcessManager {
             this.logger.log(`removed stale startup error file: "${this.startupErrorFile}"`);
         } catch {}
         this.outputChannel.clear();
+        this.outputPartialLine = false;
         this.outputChannel.show(true);
         const loveVersion = this.detectLoveVersion(lovePath);
         if (loveVersion) {
-            this.outputChannel.appendLine(`[Love2D] Version: ${loveVersion}`);
+            this.appendOutputLine(`[Love2D] Version: ${loveVersion}`);
             this.logger.log(`detected Love version: ${loveVersion}`);
         }
-        this.outputChannel.appendLine(`[Love2D] Launching: ${lovePath} ${bootstrapDir}`);
+        this.appendOutputLine(`[Love2D] Launching: ${lovePath} ${bootstrapDir}`);
         this.logger.log('output channel cleared and shown');
 
         try {
@@ -80,17 +85,17 @@ export class ProcessManager {
             this.logger.log(`spawned child pid=${proc.pid ?? 'unknown'}`);
 
             proc.stdout?.on('data', (data: Buffer | string) => {
-                this.outputChannel.append(data.toString());
+                this.appendOutput(data.toString());
             });
             this.logger.log('stdout listener attached');
 
             proc.stderr?.on('data', (data: Buffer | string) => {
-                this.outputChannel.append(data.toString());
+                this.appendOutput(data.toString());
             });
             this.logger.log('stderr listener attached');
 
             proc.on('close', (code: number | null) => {
-                this.outputChannel.appendLine(`[Love2D] Process exited with code ${code}`);
+                this.appendOutputLine(`[Love2D] Process exited with code ${code}`);
                 this.logger.log(`process close observed: code=${code} expectedExit=${this.expectedExit}`);
                 if (this.process === proc) {
                     this.process = null;
@@ -288,11 +293,50 @@ export class ProcessManager {
             }
 
             this.startupErrorDelivered = true;
-            this.outputChannel.appendLine(message);
+            this.appendOutputLine(message);
             this.logger.log('startup error forwarded from temp file');
         } catch {
             return;
         }
+    }
+
+    private appendOutput(chunk: string): void {
+        if (!chunk) {
+            return;
+        }
+
+        const normalized = chunk.replace(/\r\n/g, '\n');
+        const parts = normalized.split('\n');
+
+        for (let index = 0; index < parts.length; index += 1) {
+            const line = parts[index] ?? '';
+            const isLast = index === parts.length - 1;
+            const hasTrailingNewline = !isLast;
+
+            if (!this.outputPartialLine) {
+                const prefixedLine = this.rootLogger.formatLine(line);
+                this.outputChannel.append(prefixedLine);
+                this.fileLogStore?.appendChunk(prefixedLine);
+            } else {
+                this.outputChannel.append(line);
+                this.fileLogStore?.appendChunk(line);
+            }
+
+            if (hasTrailingNewline) {
+                this.outputChannel.append('\n');
+                this.fileLogStore?.appendChunk('\n');
+                this.outputPartialLine = false;
+            } else {
+                this.outputPartialLine = true;
+            }
+        }
+    }
+
+    private appendOutputLine(line: string): void {
+        const formattedLine = this.rootLogger.formatLine(line);
+        this.outputChannel.appendLine(formattedLine);
+        this.fileLogStore?.write(formattedLine);
+        this.outputPartialLine = false;
     }
 
     public dispose() {
