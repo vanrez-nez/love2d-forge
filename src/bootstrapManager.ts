@@ -8,17 +8,17 @@ export class BootstrapManager {
     private bridgePortFile: string;
     private startupErrorFile: string;
 
-    constructor(private workspaceRoot: string, private extensionPath: string, private logger: Logger) {
+    constructor(workspaceRoot: string, private extensionPath: string, private logger: Logger) {
         this.bootstrapDir = getBootstrapDir(workspaceRoot);
         this.bridgePortFile = getBridgePortFile(workspaceRoot);
         this.startupErrorFile = getStartupErrorFile(workspaceRoot);
     }
 
-    public prepare(hotPollIntervalMs: number, proxyErrorLogs: boolean): string {
+    public prepare(appRoot: string, hotPollIntervalMs: number, proxyErrorLogs: boolean): string {
         this.logger.log(`bootstrap prepare start: dir="${this.bootstrapDir}" hotPollIntervalMs=${hotPollIntervalMs} proxyErrorLogs=${proxyErrorLogs}`);
         fs.mkdirSync(this.bootstrapDir, { recursive: true });
 
-        const projectPath = this.workspaceRoot.replace(/\\/g, '/');
+        const projectPath = appRoot.replace(/\\/g, '/');
         const assetsDir = path.join(this.extensionPath, 'assets');
         const hotPollIntervalSeconds = Math.max(hotPollIntervalMs, 1) / 1000;
 
@@ -51,8 +51,8 @@ export class BootstrapManager {
         // conf.lua is skipped — our conf.lua proxies it already.
         const reserved = new Set(['main.lua', 'conf.lua', '__hot__.lua']);
 
-        for (const item of fs.readdirSync(this.workspaceRoot)) {
-            const src = path.join(this.workspaceRoot, item);
+        for (const item of fs.readdirSync(appRoot)) {
+            const src = path.join(appRoot, item);
             const linkName = item === 'main.lua' ? '__user_main.lua' : item;
             const dest = path.join(this.bootstrapDir, linkName);
 

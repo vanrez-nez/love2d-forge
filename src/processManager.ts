@@ -33,8 +33,8 @@ export class ProcessManager {
         this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'), inferLogTypes);
     }
 
-    public async launch(bootstrapDir: string, workspaceRoot: string, executablePath: string, reason: string): Promise<boolean> {
-        this.logger.log(`launch requested: reason="${reason}" running=${this.isRunning()} workspace="${workspaceRoot}" bootstrap="${bootstrapDir}"`);
+    public async launch(bootstrapDir: string, workspaceRoot: string, launchCwd: string, executablePath: string, reason: string): Promise<boolean> {
+        this.logger.log(`launch requested: reason="${reason}" running=${this.isRunning()} workspace="${workspaceRoot}" cwd="${launchCwd}" bootstrap="${bootstrapDir}"`);
         if (this.process) {
             await this.stop();
         }
@@ -42,7 +42,7 @@ export class ProcessManager {
         const lovePath = executablePath || this.detectLovePath();
         this.logger.log(`resolved Love executable: "${lovePath}" (configured=${executablePath ? 'yes' : 'no'})`);
         if (!lovePath) {
-            vscode.window.showErrorMessage('Love2D executable not found. Please configure "love2d.executablePath" in settings.');
+            vscode.window.showErrorMessage('I could not find the Love2D executable. Configure "love2d.executablePath" in settings.');
             return false;
         }
 
@@ -76,7 +76,7 @@ export class ProcessManager {
         try {
             this.logger.log('spawning Love2D process');
             const proc = childProcess.spawn(lovePath, [bootstrapDir], {
-                cwd: workspaceRoot,  // keep cwd at project so io.open relative paths work
+                cwd: launchCwd,
                 env: {
                     ...process.env,
                     LOVE2D_HOT_PORT: '0'
@@ -119,7 +119,7 @@ export class ProcessManager {
             return true;
         } catch (err) {
             this.logger.error(`launch failed: ${String(err)}`);
-            vscode.window.showErrorMessage(`Failed to launch Love2D: ${err}`);
+            vscode.window.showErrorMessage(`I failed to launch Love2D: ${err}`);
             return false;
         }
     }

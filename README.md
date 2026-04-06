@@ -14,7 +14,7 @@ A Zero-Friction Entry VS Code extension for Love2D projects that launches throug
 
 ## Getting Started
 
-1. **Launch**: Open a folder with a `main.lua` and click the `$(debug-start) Love2D` button in the status bar or run the **Love2D: Run Game** command.
+1. **Launch**: Open a Love2D workspace and click the `$(debug-start) Love2D` button in the status bar or run the **Love2D: Run Game** command.
 2. **Auto-Reload**: Any change to a `.lua` file while the game is running is debounced, classified, and currently handled by restarting the Love2D process.
 3. **Inspect Logs**: Open the `Love2D` output channel to see `[love2d]` and `[hot]` diagnostics for change detection, process restart, and Lua-side module polling.
 
@@ -26,6 +26,9 @@ If no project config exists, Love2D Forge uses these defaults:
 
 - `proxyErrorLogs: true`
 - `inferLogTypes: true`
+- `autoDiscovery: true`
+- `autoDiscoverySearchDepth: 2`
+- `location: undefined`
 - `fileLogs.enabled: false`
 - `fileLogs.outputFile: "love2d.log"`
 - `fileLogs.logLines: 1000`
@@ -38,6 +41,12 @@ Example:
 {
   "proxyErrorLogs": true,
   "inferLogTypes": true,
+  "autoDiscovery": true,
+  "autoDiscoverySearchDepth": 2,
+  "location": [
+    "apps/game",
+    "tools/editor/main.lua"
+  ],
   "fileLogs": {
     "enabled": false,
     "outputFile": "love2d.log",
@@ -49,6 +58,10 @@ Example:
 How it works:
 - `proxyErrorLogs` enables advanced error handling by proxying Love calls so critical errors are always logged.
 - `inferLogTypes` classifies bridged Lua `print()` messages by prefixes like `error:`, `warn:`, or `info:`.
+- `autoDiscovery` controls whether Love2D Forge scans for `main.lua` when `location` is not configured.
+- `autoDiscoverySearchDepth` controls how many folder levels deep autodiscovery scans. The default is `2`.
+- `location` optionally points to one app folder or `main.lua`, or a list of them. Directory values are completed to `main.lua`.
+  If `location` is configured, Love2D Forge uses only those configured locations and does not mix in scanned candidates.
   Example:
 
   ```lua

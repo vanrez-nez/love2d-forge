@@ -2,7 +2,7 @@
   "name": "love2d-forge",
   "displayName": "Love2D Forge",
   "description": "VS Code extension to supercharge Löve with hot reload, file logging, and more.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "images/icon.png",
   "publisher": "blindgazer",
   "repository": {
@@ -20,7 +20,7 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:main.lua"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
