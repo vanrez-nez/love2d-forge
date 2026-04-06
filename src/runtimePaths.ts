@@ -7,13 +7,13 @@ function getWorkspaceHash(workspaceRoot: string): string {
 }
 
 export function getBootstrapDir(workspaceRoot: string): string {
-    return path.join(os.tmpdir(), `love2d-hot-${getWorkspaceHash(workspaceRoot)}`);
+    return path.join(os.tmpdir(), `love2d-forge-${getWorkspaceHash(workspaceRoot)}`);
 }
 
 export function getBridgePortFile(workspaceRoot: string): string {
-    return path.join(os.tmpdir(), `love2d-hot-${getWorkspaceHash(workspaceRoot)}.port`);
+    return path.join(os.tmpdir(), `love2d-forge-${getWorkspaceHash(workspaceRoot)}.port`);
 }
 
 export function getStartupErrorFile(workspaceRoot: string): string {
-    return path.join(os.tmpdir(), `love2d-hot-${getWorkspaceHash(workspaceRoot)}.startup-error.log`);
+    return path.join(os.tmpdir(), `love2d-forge-${getWorkspaceHash(workspaceRoot)}.startup-error.log`);
 }

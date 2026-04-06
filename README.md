@@ -1,4 +1,4 @@
-# Love2D Hot Reload
+# Love2D Forge
 
 A VS Code extension that launches Love2D projects through a bootstrap layer, watches Lua changes, and logs the reload path in the VS Code output channel.
 
@@ -35,4 +35,4 @@ A VS Code extension that launches Love2D projects through a bootstrap layer, wat
 - [Love2D](https://love2d.org/) installed and in your system PATH.
 
 ---
-Managed and maintained by the Love2D Hot Reload Extension.
+Managed and maintained by Love2D Forge.

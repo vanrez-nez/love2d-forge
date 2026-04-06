@@ -24,7 +24,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
 };
 
 export function getProjectConfigPath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.love2d-hotreload', 'config.json');
+    return path.join(workspaceRoot, '.love2d-forge', 'config.json');
 }
 
 export async function readProjectConfig(workspaceRoot: string): Promise<ProjectConfig> {

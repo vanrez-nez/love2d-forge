@@ -1,4 +1,4 @@
-# Love2D Hot Reload — Current Architecture
+# Love2D Forge — Current Architecture
 
 ## Overview
 
@@ -35,7 +35,7 @@ output channel.
 ## Source Layout
 
 ```text
-love2d-hot-reload/
+love2d-forge/
 ├── src/
 │   ├── extension.ts        — activation and command wiring
 │   ├── processManager.ts   — Love process lifecycle and output channel

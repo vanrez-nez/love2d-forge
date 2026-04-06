@@ -1,6 +1,6 @@
 {
-  "name": "love2d-hot-reload",
-  "displayName": "love2d-hot-reload",
+  "name": "love2d-forge",
+  "displayName": "love2d-forge",
   "description": "Hot reload for Love2D projects with zero mandatory modifications.",
   "version": "0.0.1",
   "engines": {
@@ -33,7 +33,7 @@
       }
     ],
     "configuration": {
-      "title": "Love2D Hot Reload",
+      "title": "Love2D Forge",
       "properties": {
         "love2d.executablePath": {
           "type": "string",
