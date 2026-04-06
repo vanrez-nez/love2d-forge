@@ -3,19 +3,48 @@
 
 local PROJECT = "__PROJECT_PATH__"
 local BRIDGE_PORT_FILE = "__BRIDGE_PORT_FILE__"
+local STARTUP_ERROR_FILE = "__STARTUP_ERROR_FILE__"
 local HOT_POLL_INTERVAL = __HOT_POLL_INTERVAL_SECONDS__
 
 -- Extend package.path so require() finds user modules via the real OS path too
 package.path = PROJECT .. "/?.lua;" .. PROJECT .. "/?/init.lua;" .. package.path
 
+local function write_startup_error(message)
+    local file = io.open(STARTUP_ERROR_FILE, "w")
+    if not file then
+        return
+    end
+    file:write(message)
+    file:close()
+end
+
+-- Start the bridge before running user code so startup errors can be forwarded.
+_G.__LOVE2D_HOT_POLL_INTERVAL = HOT_POLL_INTERVAL
+_G.__LOVE2D_PROJECT_PATH = PROJECT
+_G.__LOVE2D_BRIDGE_PORT_FILE = BRIDGE_PORT_FILE
+_G.__LOVE2D_STARTUP_ERROR_FILE = STARTUP_ERROR_FILE
+local hot_ok, hot_err = xpcall(function()
+    require("__hot__")
+end, function(message)
+    return debug.traceback(tostring(message), 2)
+end)
+if not hot_ok then
+    write_startup_error("[love2d] Error while loading __hot__:\n" .. tostring(hot_err))
+    error("[love2d] Error while loading __hot__:\n" .. tostring(hot_err), 0)
+end
+
 -- User's main.lua is mirrored as __user_main.lua in this bootstrap dir.
 -- love.filesystem finds it directly — no mounting needed.
 local chunk, err = love.filesystem.load("__user_main.lua")
 assert(chunk, "[love2d] Could not load main.lua: " .. tostring(err))
-chunk()
+local ok, runtime_err = xpcall(chunk, function(message)
+    return debug.traceback(tostring(message), 2)
+end)
+if not ok then
+    write_startup_error("[love2d] Error while running main.lua:\n" .. tostring(runtime_err))
+    error("[love2d] Error while running main.lua:\n" .. tostring(runtime_err), 0)
+end
 
--- Inject hot reload on top of whatever love callbacks the user defined
-_G.__LOVE2D_HOT_POLL_INTERVAL = HOT_POLL_INTERVAL
-_G.__LOVE2D_PROJECT_PATH = PROJECT
-_G.__LOVE2D_BRIDGE_PORT_FILE = BRIDGE_PORT_FILE
-require("__hot__")
+if type(_G.__LOVE2D_WRAP_CALLBACKS) == "function" then
+    _G.__LOVE2D_WRAP_CALLBACKS()
+end

@@ -3,17 +3,21 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { Logger } from './logger';
 import { BridgeClient } from './bridgeClient';
-import { getBridgePortFile } from './runtimePaths';
+import { getBridgePortFile, getStartupErrorFile } from './runtimePaths';
 
 export class ProcessManager {
     private process: childProcess.ChildProcess | null = null;
     private outputChannel: vscode.OutputChannel;
     private logger: Logger;
     private bridgeClient: BridgeClient;
+    private readonly versionCache = new Map<string, string | null>();
     private expectedExit = false;
     private bridgePollTimer: NodeJS.Timeout | null = null;
+    private startupErrorPollTimer: NodeJS.Timeout | null = null;
     private bridgePortFile: string | null = null;
+    private startupErrorFile: string | null = null;
     private lastBridgePort: number | null = null;
+    private startupErrorDelivered = false;
     public onCrash: (() => void) | null = null;
 
     constructor() {
@@ -37,15 +41,27 @@ export class ProcessManager {
 
         this.expectedExit = false;
         this.bridgePortFile = getBridgePortFile(workspaceRoot);
+        this.startupErrorFile = getStartupErrorFile(workspaceRoot);
         this.lastBridgePort = null;
+        this.startupErrorDelivered = false;
         this.bridgeClient.disconnect();
         this.stopBridgePolling();
+        this.stopStartupErrorPolling();
         try {
             fs.unlinkSync(this.bridgePortFile);
             this.logger.log(`removed stale bridge port file: "${this.bridgePortFile}"`);
         } catch {}
+        try {
+            fs.unlinkSync(this.startupErrorFile);
+            this.logger.log(`removed stale startup error file: "${this.startupErrorFile}"`);
+        } catch {}
         this.outputChannel.clear();
         this.outputChannel.show(true);
+        const loveVersion = this.detectLoveVersion(lovePath);
+        if (loveVersion) {
+            this.outputChannel.appendLine(`[Love2D] Version: ${loveVersion}`);
+            this.logger.log(`detected Love version: ${loveVersion}`);
+        }
         this.outputChannel.appendLine(`[Love2D] Launching: ${lovePath} ${bootstrapDir}`);
         this.logger.log('output channel cleared and shown');
 
@@ -80,6 +96,8 @@ export class ProcessManager {
                     this.process = null;
                     this.bridgeClient.disconnect();
                     this.stopBridgePolling();
+                    this.stopStartupErrorPolling();
+                    this.flushStartupErrorFile();
                     const expectedExit = this.expectedExit;
                     this.expectedExit = false;
                     if (!expectedExit) {
@@ -89,6 +107,7 @@ export class ProcessManager {
             });
 
             this.startBridgePolling();
+            this.startStartupErrorPolling();
             return true;
         } catch (err) {
             this.logger.log(`launch failed: ${String(err)}`);
@@ -107,6 +126,7 @@ export class ProcessManager {
         this.expectedExit = true;
         this.bridgeClient.disconnect();
         this.stopBridgePolling();
+        this.stopStartupErrorPolling();
         this.logger.log(`stop requested for pid=${proc.pid ?? 'unknown'}`);
 
         return new Promise((resolve) => {
@@ -157,6 +177,33 @@ export class ProcessManager {
         return 'love';
     }
 
+    private detectLoveVersion(lovePath: string): string | null {
+        const cached = this.versionCache.get(lovePath);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        try {
+            const result = childProcess.spawnSync(lovePath, ['--version'], {
+                encoding: 'utf8'
+            });
+            const output = `${result.stdout || ''}${result.stderr || ''}`.trim();
+            if (!output) {
+                this.versionCache.set(lovePath, null);
+                return null;
+            }
+
+            const firstLine = output.split(/\r?\n/, 1)[0]?.trim();
+            const version = firstLine || null;
+            this.versionCache.set(lovePath, version);
+            return version;
+        } catch (error) {
+            this.logger.log(`failed to detect Love version: ${String(error)}`);
+            this.versionCache.set(lovePath, null);
+            return null;
+        }
+    }
+
     public getOutputChannel(): vscode.OutputChannel {
         return this.outputChannel;
     }
@@ -172,11 +219,30 @@ export class ProcessManager {
         }, 250);
     }
 
+    private startStartupErrorPolling(): void {
+        if (!this.startupErrorFile || this.startupErrorPollTimer) {
+            return;
+        }
+
+        this.logger.log(`startup error polling started: file="${this.startupErrorFile}"`);
+        this.startupErrorPollTimer = setInterval(() => {
+            this.flushStartupErrorFile();
+        }, 100);
+    }
+
     private stopBridgePolling(): void {
         if (this.bridgePollTimer) {
             clearInterval(this.bridgePollTimer);
             this.bridgePollTimer = null;
             this.logger.log('bridge polling stopped');
+        }
+    }
+
+    private stopStartupErrorPolling(): void {
+        if (this.startupErrorPollTimer) {
+            clearInterval(this.startupErrorPollTimer);
+            this.startupErrorPollTimer = null;
+            this.logger.log('startup error polling stopped');
         }
     }
 
@@ -210,10 +276,30 @@ export class ProcessManager {
         }
     }
 
+    private flushStartupErrorFile(): void {
+        if (!this.startupErrorFile || this.startupErrorDelivered) {
+            return;
+        }
+
+        try {
+            const message = fs.readFileSync(this.startupErrorFile, 'utf8').trim();
+            if (!message) {
+                return;
+            }
+
+            this.startupErrorDelivered = true;
+            this.outputChannel.appendLine(message);
+            this.logger.log('startup error forwarded from temp file');
+        } catch {
+            return;
+        }
+    }
+
     public dispose() {
         this.stop();
         this.bridgeClient.disconnect();
         this.stopBridgePolling();
+        this.stopStartupErrorPolling();
         this.outputChannel.dispose();
     }
 }

@@ -1,15 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from './logger';
-import { getBootstrapDir, getBridgePortFile } from './runtimePaths';
+import { getBootstrapDir, getBridgePortFile, getStartupErrorFile } from './runtimePaths';
 
 export class BootstrapManager {
     private bootstrapDir: string;
     private bridgePortFile: string;
+    private startupErrorFile: string;
 
     constructor(private workspaceRoot: string, private extensionPath: string, private logger: Logger) {
         this.bootstrapDir = getBootstrapDir(workspaceRoot);
         this.bridgePortFile = getBridgePortFile(workspaceRoot);
+        this.startupErrorFile = getStartupErrorFile(workspaceRoot);
     }
 
     public prepare(hotPollIntervalMs: number): string {
@@ -33,6 +35,7 @@ export class BootstrapManager {
             mainTemplate
                 .replace('__PROJECT_PATH__', projectPath)
                 .replace('__BRIDGE_PORT_FILE__', this.bridgePortFile.replace(/\\/g, '/'))
+                .replace('__STARTUP_ERROR_FILE__', this.startupErrorFile.replace(/\\/g, '/'))
                 .replace('__HOT_POLL_INTERVAL_SECONDS__', hotPollIntervalSeconds.toFixed(3))
         );
 

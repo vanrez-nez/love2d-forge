@@ -9,29 +9,126 @@ end
 
 local project_path = rawget(_G, "__LOVE2D_PROJECT_PATH") or "."
 local port_file = rawget(_G, "__LOVE2D_BRIDGE_PORT_FILE") or (project_path .. "/.love2d-hot-port")
+local startup_error_file = rawget(_G, "__LOVE2D_STARTUP_ERROR_FILE")
 local server = nil
 local client = nil
-local buffer = ""
 local original_print = print
+local unpack_values = table.unpack or unpack
+local bridge_degraded = false
+local bridge_shutdown = false
+local send_line
+local encode_json
+local emit_log_line
+local wrapped_callbacks = {}
 
-local function log(message)
-    original_print("[hot] " .. message)
-end
-
-local function send_line(payload)
+function emit_log_line(message, flush)
     if not client then
         return
     end
 
-    local ok, err = client:send(payload .. "\n")
+    local payload = encode_json({
+        type = "log",
+        data = message
+    }) .. "\n"
+
+    if flush then
+        local previous_timeout = client:gettimeout()
+        client:settimeout(0.1)
+        client:send(payload)
+        client:settimeout(previous_timeout)
+        return
+    end
+
+    send_line(payload)
+end
+
+local function log(message)
+    local line = "[hot] " .. message
+    original_print(line)
+    emit_log_line(line, false)
+end
+
+local function traceback_message(message)
+    return debug.traceback(tostring(message), 2)
+end
+
+local function delete_port_file()
+    os.remove(port_file)
+end
+
+local function write_startup_error(message)
+    if not startup_error_file then
+        return
+    end
+
+    local file = io.open(startup_error_file, "w")
+    if not file then
+        return
+    end
+
+    file:write(message)
+    file:close()
+end
+
+local function shutdown_bridge_runtime(reason)
+    if bridge_shutdown then
+        return
+    end
+
+    bridge_shutdown = true
+    local shutdown_line = "[hot] bridge runtime stopped: " .. tostring(reason)
+    original_print(shutdown_line)
+    emit_log_line(shutdown_line, true)
+
+    if client then
+        client:close()
+        client = nil
+    end
+    if server then
+        server:close()
+        server = nil
+    end
+
+    delete_port_file()
+    print = original_print
+end
+
+local function mark_bridge_degraded(reason)
+    if bridge_degraded then
+        return
+    end
+
+    bridge_degraded = true
+    write_startup_error(reason)
+    log(reason)
+    shutdown_bridge_runtime(reason)
+end
+
+local function safe_call(label, fn, ...)
+    local packed_args = { ... }
+    return xpcall(function()
+        return fn(unpack_values(packed_args))
+    end, function(message)
+        local trace = traceback_message(message)
+        mark_bridge_degraded(label .. ": " .. trace)
+        return trace
+    end)
+end
+
+function send_line(payload)
+    if not client then
+        return
+    end
+
+    local ok, err = client:send(payload)
     if not ok then
-        log("send error: " .. tostring(err))
+        original_print("[hot] send error: " .. tostring(err))
         client:close()
         client = nil
     end
 end
 
-local function encode_json(value)
+function encode_json(value)
     local t = type(value)
     if t == "string" then
         local escaped = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
@@ -74,7 +171,7 @@ local function decode_json(str)
         return nil, err
     end
 
-    local ok, result = pcall(chunk)
+    local ok, result = safe_call("json decode failed", chunk)
     if not ok then
         return nil, result
     end
@@ -91,10 +188,6 @@ local function write_port_file(port)
 
     file:write(tostring(port))
     file:close()
-end
-
-local function delete_port_file()
-    os.remove(port_file)
 end
 
 local function merge_module(old_module, new_module)
@@ -121,6 +214,10 @@ local function merge_module(old_module, new_module)
 end
 
 local function reload_module(module_name)
+    if bridge_degraded then
+        return false, "bridge is in degraded state after a previous runtime error; restart required"
+    end
+
     if not module_name or package.loaded[module_name] == nil then
         return false, "module not loaded: " .. tostring(module_name)
     end
@@ -128,7 +225,7 @@ local function reload_module(module_name)
     local old_module = package.loaded[module_name]
     package.loaded[module_name] = nil
 
-    local ok, new_module = pcall(require, module_name)
+    local ok, new_module = safe_call("module reload failed for " .. tostring(module_name), require, module_name)
     if not ok then
         package.loaded[module_name] = old_module
         return false, tostring(new_module)
@@ -172,7 +269,7 @@ local function handle_command(line)
         response.error = "unknown command: " .. tostring(message.cmd)
     end
 
-    send_line(encode_json(response))
+    send_line(encode_json(response) .. "\n")
 end
 
 local function hook_print()
@@ -190,8 +287,80 @@ local function hook_print()
         send_line(encode_json({
             type = "log",
             data = table.concat(parts, "\t")
-        }))
+        }) .. "\n")
     end
+end
+
+local function wrap_callback(name)
+    local original_callback = love[name]
+    if type(original_callback) ~= "function" then
+        return
+    end
+
+    if wrapped_callbacks[name] == original_callback then
+        return
+    end
+
+    local wrapped = function(...)
+        local packed_args = { ... }
+        local ok, result = xpcall(function()
+            return original_callback(unpack_values(packed_args))
+        end, function(message)
+            local trace = traceback_message(message)
+            mark_bridge_degraded("callback " .. name .. " failed: " .. trace)
+            return trace
+        end)
+
+        if not ok then
+            error(result, 0)
+        end
+
+        return result
+    end
+
+    wrapped_callbacks[name] = wrapped
+    love[name] = wrapped
+end
+
+local function wrap_callbacks()
+    for _, callback_name in ipairs({
+        "load",
+        "update",
+        "draw",
+        "displayrotated",
+        "filedropped",
+        "directorydropped",
+        "dropcomplete",
+        "keypressed",
+        "keyreleased",
+        "joystickadded",
+        "joystickaxis",
+        "joystickhat",
+        "joystickpressed",
+        "joystickreleased",
+        "joystickremoved",
+        "gamepadaxis",
+        "gamepadpressed",
+        "gamepadreleased",
+        "mousepressed",
+        "mousereleased",
+        "mousemoved",
+        "wheelmoved",
+        "touchpressed",
+        "touchreleased",
+        "touchmoved",
+        "textinput",
+        "textedited",
+        "resize",
+        "visible",
+        "focus",
+        "lowmemory",
+        "quit",
+        "threaderror"
+    }) do
+        wrap_callback(callback_name)
+    end
+    log("callback guards installed")
 end
 
 local function start_server()
@@ -214,7 +383,7 @@ local function start_server()
 end
 
 local function bridge_update()
-    if not server then
+    if bridge_shutdown or not server then
         return
     end
 
@@ -243,19 +412,12 @@ local function bridge_update()
 end
 
 local function bridge_quit()
-    if client then
-        client:close()
-        client = nil
-    end
-    if server then
-        server:close()
-        server = nil
-    end
-    delete_port_file()
+    shutdown_bridge_runtime("normal shutdown")
 end
 
 start_server()
 hook_print()
+_G.__LOVE2D_WRAP_CALLBACKS = wrap_callbacks
 
 local original_run = love.run
 if original_run then
