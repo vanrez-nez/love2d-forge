@@ -20,7 +20,17 @@ A Zero-Friction Entry VS Code extension for Love2D projects that launches throug
 
 ## Configuration
 
-Project configuration lives in `.love2d-forge/config.json`.
+Project configuration is completely optional.
+
+If no project config exists, Love2D Forge uses these defaults:
+
+- `proxyErrorLogs: true`
+- `inferLogTypes: true`
+- `fileLogs.enabled: false`
+- `fileLogs.outputFile: "love2d.log"`
+- `fileLogs.logLines: 1000`
+
+When you want a project config, run **Love2D: Init Config**. This creates `.love2d-forge/config.json`.
 
 Example:
 
@@ -54,15 +64,16 @@ How it works:
 | `love2d.reloadDebounce` | Milliseconds to wait after save before acting. | `300` |
 | `love2d.hotPollInterval` | Milliseconds between mtime checks inside the injected Lua hot-reload layer. | `500` |
 
+## Requirements
+
+- [Love2D](https://love2d.org/) installed and in your system PATH.
+
 ## Commands
 
 - `Love2D: Run Game`
 - `Love2D: Stop Game`
 - `Love2D: Restart Game`
-
-## Requirements
-
-- [Love2D](https://love2d.org/) installed and in your system PATH.
+- `Love2D: Init Config`
 
 ---
 Managed and maintained by Love2D Forge.
