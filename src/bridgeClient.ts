@@ -14,6 +14,12 @@ interface BridgeResponse {
     error?: string;
 }
 
+type BridgePrintLevel = 'error' | 'warn' | 'info' | 'print';
+interface InferredBridgePrint {
+    level: BridgePrintLevel;
+    message: string;
+}
+
 export class BridgeClient {
     private socket: net.Socket | null = null;
     private buffer = '';
@@ -24,8 +30,20 @@ export class BridgeClient {
         timer: ReturnType<typeof setTimeout>;
     }>();
     private _connected = false;
+    private readonly errorLogger: Logger;
+    private readonly warnLogger: Logger;
+    private readonly infoLogger: Logger;
+    private readonly printLogger: Logger;
 
-    constructor(private readonly logger: Logger) {}
+    constructor(
+        private readonly logger: Logger,
+        private readonly inferLogTypes = true
+    ) {
+        this.errorLogger = logger.child('error');
+        this.warnLogger = logger.child('warn');
+        this.infoLogger = logger.child('info');
+        this.printLogger = logger.child('print');
+    }
 
     public get connected(): boolean {
         return this._connected;
@@ -124,7 +142,7 @@ export class BridgeClient {
 
     private handleMessage(message: BridgeResponse): void {
         if (message.type === 'log') {
-            this.logger.log(`bridge log: ${String(message.data)}`);
+            this.logBridgePrint(String(message.data));
             return;
         }
 
@@ -163,4 +181,73 @@ export class BridgeClient {
             this.logger.log(`bridge disconnected: ${reason}`);
         }
     }
+
+    private logBridgePrint(message: string): void {
+        if (!this.inferLogTypes) {
+            this.logger.log(`bridge log: ${message}`);
+            return;
+        }
+
+        const inferred = inferBridgePrint(message);
+        switch (inferred.level) {
+        case 'error':
+            this.errorLogger.log(inferred.message);
+            break;
+        case 'warn':
+            this.warnLogger.log(inferred.message);
+            break;
+        case 'info':
+            this.infoLogger.log(inferred.message);
+            break;
+        default:
+            this.printLogger.log(inferred.message);
+            break;
+        }
+    }
+}
+
+function inferBridgePrint(message: string): InferredBridgePrint {
+    const trimmed = message.trim();
+    const lowered = trimmed.toLowerCase();
+
+    const errorMessage = stripLeadingKeyword(trimmed, lowered, 'error');
+    if (errorMessage) {
+        return { level: 'error', message: errorMessage };
+    }
+
+    const warnMessage = stripLeadingKeyword(trimmed, lowered, 'warn')
+        ?? stripLeadingKeyword(trimmed, lowered, 'warning');
+    if (warnMessage) {
+        return { level: 'warn', message: warnMessage };
+    }
+
+    const infoMessage = stripLeadingKeyword(trimmed, lowered, 'info');
+    if (infoMessage) {
+        return { level: 'info', message: infoMessage };
+    }
+
+    return { level: 'print', message };
+}
+
+function stripLeadingKeyword(original: string, lowered: string, keyword: string): string | null {
+    if (!lowered.startsWith(keyword)) {
+        return null;
+    }
+
+    let index = keyword.length;
+    while (index < original.length) {
+        const char = original.charAt(index);
+        if (char === ':' || char === ' ' || char === '\t' || char === ']' || char === '-') {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+
+    if (index === keyword.length && original.length !== keyword.length) {
+        return null;
+    }
+
+    const stripped = original.slice(index).trimStart();
+    return stripped.length > 0 ? stripped : original;
 }

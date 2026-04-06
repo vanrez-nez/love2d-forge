@@ -9,11 +9,13 @@ export interface ProjectFileLogConfig {
 
 export interface ProjectConfig {
     proxyErrorLogs: boolean;
+    inferLogTypes: boolean;
     fileLogs: ProjectFileLogConfig;
 }
 
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
     proxyErrorLogs: true,
+    inferLogTypes: true,
     fileLogs: {
         enabled: false,
         outputFile: 'love2d.log',
@@ -33,6 +35,7 @@ export async function readProjectConfig(workspaceRoot: string): Promise<ProjectC
         const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
         return {
             proxyErrorLogs: parsed.proxyErrorLogs ?? DEFAULT_PROJECT_CONFIG.proxyErrorLogs,
+            inferLogTypes: parsed.inferLogTypes ?? DEFAULT_PROJECT_CONFIG.inferLogTypes,
             fileLogs: {
                 enabled: parsed.fileLogs?.enabled ?? DEFAULT_PROJECT_CONFIG.fileLogs.enabled,
                 outputFile: parsed.fileLogs?.outputFile ?? DEFAULT_PROJECT_CONFIG.fileLogs.outputFile,

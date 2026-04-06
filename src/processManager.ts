@@ -23,11 +23,14 @@ export class ProcessManager {
     private outputPartialLine = false;
     public onCrash: (() => void) | null = null;
 
-    constructor(private readonly fileLogStore?: FileLogStore | null) {
+    constructor(
+        private readonly fileLogStore?: FileLogStore | null,
+        inferLogTypes = true
+    ) {
         this.outputChannel = vscode.window.createOutputChannel('Love2D');
         this.rootLogger = new Logger(this.outputChannel, '[love2d]', this.fileLogStore);
         this.logger = this.rootLogger.child('process');
-        this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'));
+        this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'), inferLogTypes);
     }
 
     public async launch(bootstrapDir: string, workspaceRoot: string, executablePath: string, reason: string): Promise<boolean> {
