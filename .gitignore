@@ -24,3 +24,4 @@ Thumbs.db
 # Misc
 .vscode-test/
 *.vsix
+tmp

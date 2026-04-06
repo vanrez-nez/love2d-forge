@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 
 export enum ExtensionState {
     Stopped,
-    Runningrestart,
-    RunningHotSwap
+    Running
 }
 
 export class StatusBarController {
@@ -23,14 +22,9 @@ export class StatusBarController {
                 this.statusBarItem.tooltip = 'Click to launch Love2D game';
                 this.statusBarItem.color = undefined;
                 break;
-            case ExtensionState.Runningrestart:
-                this.statusBarItem.text = '$(sync) Love2D (restart mode)';
-                this.statusBarItem.tooltip = 'Running in full restart mode. Saving a file will kill and relaunch.';
-                this.statusBarItem.color = new vscode.ThemeColor('statusBarItem.warningForeground');
-                break;
-            case ExtensionState.RunningHotSwap:
-                this.statusBarItem.text = '$(zap) Love2D (hot swap)';
-                this.statusBarItem.tooltip = 'Running in hot swap mode. State is preserved across reloads.';
+            case ExtensionState.Running:
+                this.statusBarItem.text = '$(zap) Love2D';
+                this.statusBarItem.tooltip = 'Love2D is running. Save events are watched and logged in the Love2D output channel.';
                 this.statusBarItem.color = new vscode.ThemeColor('statusBarItem.prominentForeground');
                 break;
         }

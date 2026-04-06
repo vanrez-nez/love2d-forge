@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { ProcessManager } from './processManager';
-import { HotManager } from './hotManager';
+import { BootstrapManager } from './bootstrapManager';
 import { FileWatcher } from './watcher';
 import { StatusBarController, ExtensionState } from './statusBar';
+import { Logger } from './logger';
+import { classifyReloadEvent, ReloadEvent } from './reloadPolicy';
 
 export function activate(context: vscode.ExtensionContext) {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -13,70 +13,83 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const processManager = new ProcessManager();
-    const hotManager = new HotManager(workspaceRoot);
+    const logger = new Logger(processManager.getOutputChannel(), '[love2d]');
+    const activationLogger = logger.child('extension');
+    const reloadLogger = logger.child('reload');
+    const bootstrapManager = new BootstrapManager(workspaceRoot, context.extensionPath, logger.child('bootstrap'));
     const statusBar = new StatusBarController();
+    activationLogger.log(`activate: workspaceRoot="${workspaceRoot}" extensionPath="${context.extensionPath}"`);
 
-    const reload = async () => {
-        if (!processManager.isRunning()) {
-            await launch();
-            return;
-        }
-
-        if (hotManager.isHotReloadEnabled()) {
-            // hot.lua is polling, no action needed from extension side
-            // (could add a TCP nudge here in the future)
-            return;
-        }
-
-        // Mode 1: Restart
-        await launch();
-    };
-
-    const launch = async () => {
+    const launch = async (reason: string) => {
         const config = vscode.workspace.getConfiguration('love2d');
         const executablePath = config.get<string>('executablePath') || '';
-        
-        const success = await processManager.launch(workspaceRoot, executablePath);
+        const hotPollInterval = config.get<number>('hotPollInterval') || 500;
+        // Rebuild bootstrap on every launch so new/deleted project files are reflected
+        activationLogger.log(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval}`);
+        const bootstrapDir = bootstrapManager.prepare(hotPollInterval);
+        const success = await processManager.launch(bootstrapDir, workspaceRoot, executablePath, reason);
         if (success) {
-            updateStatusBar();
+            statusBar.update(ExtensionState.Running);
+            activationLogger.log('status bar updated: running');
         }
     };
 
     const stop = async () => {
+        activationLogger.log('manual stop requested');
         await processManager.stop();
-        updateStatusBar();
+        statusBar.update(ExtensionState.Stopped);
+        activationLogger.log('status bar updated: stopped');
     };
 
-    const updateStatusBar = () => {
+    processManager.onCrash = () => {
+        statusBar.update(ExtensionState.Stopped);
+        activationLogger.log('process crash handler invoked; status bar updated to stopped');
+        vscode.window.showWarningMessage('Love2D stopped unexpectedly.', 'Restart')
+            .then(choice => {
+                activationLogger.log(`crash dialog choice: ${choice ?? 'dismissed'}`);
+                if (choice === 'Restart') {
+                    void launch('crash recovery restart');
+                }
+            });
+    };
+
+    const handleReloadEvent = async (event: ReloadEvent) => {
+        reloadLogger.log(`callback entered: type=${event.type} path="${event.relativePath}" running=${processManager.isRunning()}`);
+        const decision = classifyReloadEvent(event);
+        reloadLogger.log(`decision: classification=${decision.classification} action=${decision.action} reason="${decision.reason}"`);
         if (!processManager.isRunning()) {
-            statusBar.update(ExtensionState.Stopped);
-        } else if (hotManager.isHotReloadEnabled()) {
-            statusBar.update(ExtensionState.RunningHotSwap);
-        } else {
-            statusBar.update(ExtensionState.Runningrestart);
+            reloadLogger.log('callback ignored because process is not running');
+            return;
         }
+
+        if (decision.action === 'bridge-reload' && decision.moduleName) {
+            if (processManager.isBridgeConnected()) {
+                try {
+                    await processManager.reloadModule(decision.moduleName);
+                    return;
+                } catch (error) {
+                    reloadLogger.log(`bridge reload failed for ${decision.moduleName}; falling back to restart: ${String(error)}`);
+                }
+            } else {
+                reloadLogger.log(`bridge reload unavailable for ${decision.moduleName}; bridge not connected, falling back to restart`);
+            }
+        }
+
+        await launch(`watcher ${event.type} ${event.relativePath} -> ${decision.classification}: ${decision.reason}`);
     };
 
-    const watcher = new FileWatcher(reload);
+    const watcher = new FileWatcher(workspaceRoot, logger.child('watcher'), (event) => {
+        void handleReloadEvent(event);
+    });
 
-    // Register Commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('love2d.launch', launch),
+        vscode.commands.registerCommand('love2d.launch', () => launch('manual command: love2d.launch')),
         vscode.commands.registerCommand('love2d.stop', stop),
-        vscode.commands.registerCommand('love2d.reload', reload),
-        vscode.commands.registerCommand('love2d.enableHotReload', async () => {
-            const templatePath = path.join(context.extensionPath, 'assets', 'hot.lua');
-            const template = fs.readFileSync(templatePath, 'utf8');
-            await hotManager.enableHotReload(template);
-            updateStatusBar();
-        }),
-        vscode.commands.registerCommand('love2d.disableHotReload', async () => {
-            await hotManager.disableHotReload();
-            updateStatusBar();
-        })
+        vscode.commands.registerCommand('love2d.reload', () => launch('manual command: love2d.reload')),
+        processManager,
+        statusBar,
+        watcher
     );
-
-    context.subscriptions.push(processManager, statusBar, watcher);
 }
 
 export function deactivate() {}

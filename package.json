@@ -24,16 +24,8 @@
         "title": "Love2D: Stop Game"
       },
       {
-        "command": "love2d.enableHotReload",
-        "title": "Love2D: Enable Hot Reload"
-      },
-      {
-        "command": "love2d.disableHotReload",
-        "title": "Love2D: Disable Hot Reload"
-      },
-      {
         "command": "love2d.reload",
-        "title": "Love2D: Reload"
+        "title": "Love2D: Restart Game"
       }
     ],
     "configuration": {
@@ -51,8 +43,8 @@
         },
         "love2d.hotPollInterval": {
           "type": "number",
-          "default": 300,
-          "description": "Milliseconds between mtime checks inside hot.lua."
+          "default": 500,
+          "description": "Milliseconds between mtime checks inside hot.lua (restart required to take effect)."
         }
       }
     }

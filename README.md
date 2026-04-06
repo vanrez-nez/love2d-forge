@@ -1,32 +1,20 @@
 # Love2D Hot Reload
 
-A VS Code extension that enables hot reload for Love2D projects with zero mandatory modifications to existing projects, and near-zero modifications for full state-preserving hot swap.
+A VS Code extension that launches Love2D projects through a bootstrap layer, watches Lua changes, and logs the reload path in the VS Code output channel.
 
 ## Features
 
 - **Zero-Friction Entry**: Works out of the box on any Love2D project with no changes required.
-- **Two Reload modes**:
-  - **Full Restart (Default)**: Automatically kills and relaunches the game on save.
-  - **Hot Swap (Opt-in)**: Live-patches your running game while preserving state.
+- **Bootstrap Launch**: Runs the game through generated bootstrap files without modifying the project.
+- **Reload Diagnostics**: Logs watcher events, debounce timing, launch reasons, process lifecycle, and Lua-side hot polling.
 - **Process Management**: Integrated process control with stdout/stderr piped to the VS Code Output Channel.
-- **Managed Assets**: Automatically manages the `.love2d-hot/hot.lua` script and your `.gitignore`.
-- **Visual Feedback**: Real-time status bar updates (`▶ Love2D`, `⟳ Hot Swap`, `■ Stopped`).
+- **Visual Feedback**: Real-time status bar updates for running and stopped states.
 
 ## Getting Started
 
 1. **Launch**: Open a folder with a `main.lua` and click the `$(debug-start) Love2D` button in the status bar or run the **Love2D: Run Game** command.
-2. **Auto-Reload**: By default, any change to a `.lua` file will restart the game.
-
-## Enabling Hot Swap (State-Preserving)
-
-To preserve game state across reloads:
-
-1. Run the command **Love2D: Enable Hot Reload**.
-2. Add this line to the top of your `main.lua`:
-   ```lua
-   pcall(require, ".love2d-hot.hot")
-   ```
-3. Now, instead of restarting, the extension will live-patch changed modules. Functions will be swapped in-place, while local state in module tables is preserved.
+2. **Auto-Reload**: Any change to a `.lua` file while the game is running is debounced, classified, and currently handled by restarting the Love2D process.
+3. **Inspect Logs**: Open the `Love2D` output channel to see `[love2d]` and `[hot]` diagnostics for change detection, process restart, and Lua-side module polling.
 
 ## Configuration
 
@@ -34,15 +22,13 @@ To preserve game state across reloads:
 |---|---|---|
 | `love2d.executablePath` | Path to `love` executable. | `love` (auto-detects common macOS paths) |
 | `love2d.reloadDebounce` | Milliseconds to wait after save before acting. | `300` |
-| `love2d.hotPollInterval` | Milliseconds between mtime checks in hot-swap mode. | `300` |
+| `love2d.hotPollInterval` | Milliseconds between mtime checks inside the injected Lua hot-reload layer. | `500` |
 
 ## Commands
 
 - `Love2D: Run Game`
 - `Love2D: Stop Game`
-- `Love2D: Enable Hot Reload`
-- `Love2D: Disable Hot Reload`
-- `Love2D: Reload` (Force manual reload)
+- `Love2D: Restart Game`
 
 ## Requirements
 
