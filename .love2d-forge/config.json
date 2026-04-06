@@ -1,0 +1,9 @@
+{
+  "proxyErrorLogs": true,
+  "inferLogTypes": true,
+  "fileLogs": {
+    "enabled": true,
+    "outputFile": "love2d.log",
+    "logLines": 1000
+  }
+}

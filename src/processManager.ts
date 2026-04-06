@@ -1,7 +1,7 @@
 import * as childProcess from 'child_process';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { Logger } from './logger';
+import { Logger, LogLevel } from './logger';
 import { BridgeClient } from './bridgeClient';
 import { getBridgePortFile, getStartupErrorFile } from './runtimePaths';
 import { FileLogStore } from './fileLogStore';
@@ -28,7 +28,7 @@ export class ProcessManager {
         inferLogTypes = true
     ) {
         this.outputChannel = vscode.window.createOutputChannel('Love2D');
-        this.rootLogger = new Logger(this.outputChannel, '[love2d]', this.fileLogStore);
+        this.rootLogger = new Logger(this.outputChannel, 'love2d', this.fileLogStore);
         this.logger = this.rootLogger.child('process');
         this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'), inferLogTypes);
     }
@@ -67,10 +67,10 @@ export class ProcessManager {
         this.outputChannel.show(true);
         const loveVersion = this.detectLoveVersion(lovePath);
         if (loveVersion) {
-            this.appendOutputLine(`[Love2D] Version: ${loveVersion}`);
+            this.logger.info(`Version: ${loveVersion}`);
             this.logger.log(`detected Love version: ${loveVersion}`);
         }
-        this.appendOutputLine(`[Love2D] Launching: ${lovePath} ${bootstrapDir}`);
+        this.logger.info(`Launching: ${lovePath} ${bootstrapDir}`);
         this.logger.log('output channel cleared and shown');
 
         try {
@@ -98,7 +98,7 @@ export class ProcessManager {
             this.logger.log('stderr listener attached');
 
             proc.on('close', (code: number | null) => {
-                this.appendOutputLine(`[Love2D] Process exited with code ${code}`);
+                this.logger.info(`Process exited with code ${code}`);
                 this.logger.log(`process close observed: code=${code} expectedExit=${this.expectedExit}`);
                 if (this.process === proc) {
                     this.process = null;
@@ -118,7 +118,7 @@ export class ProcessManager {
             this.startStartupErrorPolling();
             return true;
         } catch (err) {
-            this.logger.log(`launch failed: ${String(err)}`);
+            this.logger.error(`launch failed: ${String(err)}`);
             vscode.window.showErrorMessage(`Failed to launch Love2D: ${err}`);
             return false;
         }
@@ -296,14 +296,14 @@ export class ProcessManager {
             }
 
             this.startupErrorDelivered = true;
-            this.appendOutputLine(message);
-            this.logger.log('startup error forwarded from temp file');
+            this.appendOutputLine(message, 'ERROR', 'runtime');
+            this.logger.error('startup error forwarded from temp file');
         } catch {
             return;
         }
     }
 
-    private appendOutput(chunk: string): void {
+    private appendOutput(chunk: string, level: LogLevel = 'INFO', scope = 'love'): void {
         if (!chunk) {
             return;
         }
@@ -317,7 +317,7 @@ export class ProcessManager {
             const hasTrailingNewline = !isLast;
 
             if (!this.outputPartialLine) {
-                const prefixedLine = this.rootLogger.formatLine(line);
+                const prefixedLine = this.rootLogger.child(scope).formatMessage(level, line);
                 this.outputChannel.append(prefixedLine);
                 this.fileLogStore?.appendChunk(prefixedLine);
             } else {
@@ -335,8 +335,8 @@ export class ProcessManager {
         }
     }
 
-    private appendOutputLine(line: string): void {
-        const formattedLine = this.rootLogger.formatLine(line);
+    private appendOutputLine(line: string, level: LogLevel = 'INFO', scope = 'love'): void {
+        const formattedLine = this.rootLogger.child(scope).formatMessage(level, line);
         this.outputChannel.appendLine(formattedLine);
         this.fileLogStore?.write(formattedLine);
         this.outputPartialLine = false;

@@ -35,8 +35,15 @@ Example:
 ```
 
 How it works:
-- `proxyErrorLogs` enables the runtime callback proxy layer so more Love/Lua errors are mirrored into the `Love2D` output.
+- `proxyErrorLogs` enables advanced error handling by proxying Love calls so critical errors are always logged.
 - `inferLogTypes` classifies bridged Lua `print()` messages by prefixes like `error:`, `warn:`, or `info:`.
+  Example:
+
+  ```lua
+  print("info: player spawned")
+  print("warn: shader fallback in use")
+  print("error: failed to load spritesheet")
+  ```
 - `fileLogs` controls optional persisted output logging for the last N lines.
 
 | Setting | Description | Default |

@@ -14,7 +14,7 @@ interface BridgeResponse {
     error?: string;
 }
 
-type BridgePrintLevel = 'error' | 'warn' | 'info' | 'print';
+type BridgePrintLevel = 'ERROR' | 'WARN' | 'INFO' | 'TRACE';
 interface InferredBridgePrint {
     level: BridgePrintLevel;
     message: string;
@@ -30,20 +30,11 @@ export class BridgeClient {
         timer: ReturnType<typeof setTimeout>;
     }>();
     private _connected = false;
-    private readonly errorLogger: Logger;
-    private readonly warnLogger: Logger;
-    private readonly infoLogger: Logger;
-    private readonly printLogger: Logger;
 
     constructor(
         private readonly logger: Logger,
         private readonly inferLogTypes = true
-    ) {
-        this.errorLogger = logger.child('error');
-        this.warnLogger = logger.child('warn');
-        this.infoLogger = logger.child('info');
-        this.printLogger = logger.child('print');
-    }
+    ) {}
 
     public get connected(): boolean {
         return this._connected;
@@ -190,17 +181,17 @@ export class BridgeClient {
 
         const inferred = inferBridgePrint(message);
         switch (inferred.level) {
-        case 'error':
-            this.errorLogger.log(inferred.message);
+        case 'ERROR':
+            this.logger.error(inferred.message);
             break;
-        case 'warn':
-            this.warnLogger.log(inferred.message);
+        case 'WARN':
+            this.logger.warn(inferred.message);
             break;
-        case 'info':
-            this.infoLogger.log(inferred.message);
+        case 'INFO':
+            this.logger.info(inferred.message);
             break;
         default:
-            this.printLogger.log(inferred.message);
+            this.logger.log(inferred.message);
             break;
         }
     }
@@ -212,21 +203,21 @@ function inferBridgePrint(message: string): InferredBridgePrint {
 
     const errorMessage = stripLeadingKeyword(trimmed, lowered, 'error');
     if (errorMessage) {
-        return { level: 'error', message: errorMessage };
+        return { level: 'ERROR', message: errorMessage };
     }
 
     const warnMessage = stripLeadingKeyword(trimmed, lowered, 'warn')
         ?? stripLeadingKeyword(trimmed, lowered, 'warning');
     if (warnMessage) {
-        return { level: 'warn', message: warnMessage };
+        return { level: 'WARN', message: warnMessage };
     }
 
     const infoMessage = stripLeadingKeyword(trimmed, lowered, 'info');
     if (infoMessage) {
-        return { level: 'info', message: infoMessage };
+        return { level: 'INFO', message: infoMessage };
     }
 
-    return { level: 'print', message };
+    return { level: 'TRACE', message };
 }
 
 function stripLeadingKeyword(original: string, lowered: string, keyword: string): string | null {

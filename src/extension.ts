@@ -23,7 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
         : null;
     await fileLogStore?.initialize();
     const processManager = new ProcessManager(fileLogStore, projectConfig.inferLogTypes);
-    const logger = new Logger(processManager.getOutputChannel(), '[love2d]', fileLogStore);
+    const logger = new Logger(processManager.getOutputChannel(), 'love2d', fileLogStore);
     const activationLogger = logger.child('extension');
     const reloadLogger = logger.child('reload');
     const bootstrapManager = new BootstrapManager(workspaceRoot, context.extensionPath, logger.child('bootstrap'));
