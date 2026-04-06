@@ -1,5 +1,7 @@
 # Love2D Forge
 
+![Love2D Forge icon](images/icon.png)
+
 A Zero-Friction Entry VS Code extension for Love2D projects that launches through a bootstrap layer, watches Lua changes, and logs the reload path in the VS Code output channel.
 
 ## Features
