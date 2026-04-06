@@ -1,7 +1,7 @@
 {
   "name": "love2d-forge",
   "displayName": "love2d-forge",
-  "description": "Hot reload for Love2D projects with zero mandatory modifications.",
+  "description": "VS Code extension to supercharge Löve with hot reload, file logging, and more.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.110.0"

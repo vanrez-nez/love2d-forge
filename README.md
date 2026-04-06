@@ -1,6 +1,6 @@
 # Love2D Forge
 
-A VS Code extension that launches Love2D projects through a bootstrap layer, watches Lua changes, and logs the reload path in the VS Code output channel.
+A Zero-Friction Entry VS Code extension for Love2D projects that launches through a bootstrap layer, watches Lua changes, and logs the reload path in the VS Code output channel.
 
 ## Features
 
@@ -17,6 +17,27 @@ A VS Code extension that launches Love2D projects through a bootstrap layer, wat
 3. **Inspect Logs**: Open the `Love2D` output channel to see `[love2d]` and `[hot]` diagnostics for change detection, process restart, and Lua-side module polling.
 
 ## Configuration
+
+Project configuration lives in `.love2d-forge/config.json`.
+
+Example:
+
+```json
+{
+  "proxyErrorLogs": true,
+  "inferLogTypes": true,
+  "fileLogs": {
+    "enabled": false,
+    "outputFile": "love2d.log",
+    "logLines": 1000
+  }
+}
+```
+
+How it works:
+- `proxyErrorLogs` enables the runtime callback proxy layer so more Love/Lua errors are mirrored into the `Love2D` output.
+- `inferLogTypes` classifies bridged Lua `print()` messages by prefixes like `error:`, `warn:`, or `info:`.
+- `fileLogs` controls optional persisted output logging for the last N lines.
 
 | Setting | Description | Default |
 |---|---|---|
