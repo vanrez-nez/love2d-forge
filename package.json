@@ -70,17 +70,21 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "package": "npm run compile && npm run lint && npx @vscode/vsce package",
-    "publish": "npm run compile && npm run lint && npx @vscode/vsce publish"
+    "package": "npm run compile && npm run lint && vsce package",
+    "publish:marketplace": "npm run compile && npm run lint && vsce publish",
+    "publish:ovsx": "npm run compile && npm run lint && ovsx publish",
+    "publish:all": "npm run publish:marketplace && npm run publish:ovsx"
   },
   "devDependencies": {
-    "@types/vscode": "^1.110.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
-    "eslint": "^9.39.3",
-    "typescript": "^5.9.3",
+    "@types/vscode": "^1.110.0",
     "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^9.39.3",
+    "ovsx": "^0.10.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
   }
 }
