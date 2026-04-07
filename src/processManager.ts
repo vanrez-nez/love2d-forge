@@ -32,13 +32,13 @@ export class ProcessManager {
     }
 
     public async launch(bootstrapDir: string, workspaceRoot: string, launchCwd: string, executablePath: string, reason: string): Promise<boolean> {
-        this.logger.log(`launch requested: reason="${reason}" running=${this.isRunning()} workspace="${workspaceRoot}" cwd="${launchCwd}" bootstrap="${bootstrapDir}"`);
+        this.logger.debug(`launch requested: reason="${reason}" running=${this.isRunning()} workspace="${workspaceRoot}" cwd="${launchCwd}" bootstrap="${bootstrapDir}"`);
         if (this.process) {
             await this.stop();
         }
 
         const lovePath = executablePath || this.detectLovePath();
-        this.logger.log(`resolved Love executable: "${lovePath}" (configured=${executablePath ? 'yes' : 'no'})`);
+        this.logger.debug(`resolved Love executable: "${lovePath}" (configured=${executablePath ? 'yes' : 'no'})`);
         if (!lovePath) {
             vscode.window.showErrorMessage('I could not find the Love2D executable. Configure "love2d.executablePath" in settings.');
             return false;
@@ -54,11 +54,11 @@ export class ProcessManager {
         this.stopStartupErrorPolling();
         try {
             fs.unlinkSync(this.bridgePortFile);
-            this.logger.log(`removed stale bridge port file: "${this.bridgePortFile}"`);
+            this.logger.debug(`removed stale bridge port file: "${this.bridgePortFile}"`);
         } catch {}
         try {
             fs.unlinkSync(this.startupErrorFile);
-            this.logger.log(`removed stale startup error file: "${this.startupErrorFile}"`);
+            this.logger.debug(`removed stale startup error file: "${this.startupErrorFile}"`);
         } catch {}
         this.outputChannel.clear();
         this.outputPartialLine = false;
@@ -75,10 +75,10 @@ export class ProcessManager {
             this.logger.info(`Version: ${loveVersion}`);
         }
         this.logger.info(`Launching: ${lovePath} ${bootstrapDir}`);
-        this.logger.log('output channel cleared and shown');
+        this.logger.debug('output channel cleared and shown');
 
         try {
-            this.logger.log('spawning Love2D process');
+            this.logger.debug('spawning Love2D process');
             const proc = childProcess.spawn(lovePath, [bootstrapDir], {
                 cwd: launchCwd,
                 env: {
@@ -89,21 +89,21 @@ export class ProcessManager {
             });
 
             this.process = proc;
-            this.logger.log(`spawned child pid=${proc.pid ?? 'unknown'}`);
+            this.logger.debug(`spawned child pid=${proc.pid ?? 'unknown'}`);
 
             proc.stdout?.on('data', (data: Buffer | string) => {
                 this.appendOutput(data.toString());
             });
-            this.logger.log('stdout listener attached');
+            this.logger.debug('stdout listener attached');
 
             proc.stderr?.on('data', (data: Buffer | string) => {
                 this.appendOutput(data.toString());
             });
-            this.logger.log('stderr listener attached');
+            this.logger.debug('stderr listener attached');
 
             proc.on('close', (code: number | null) => {
                 this.logger.info(`Process exited with code ${code}`);
-                this.logger.log(`process close observed: code=${code} expectedExit=${this.expectedExit}`);
+                this.logger.debug(`process close observed: code=${code} expectedExit=${this.expectedExit}`);
                 if (this.process === proc) {
                     this.process = null;
                     this.bridgeClient.disconnect();
@@ -130,7 +130,7 @@ export class ProcessManager {
 
     public async stop(): Promise<void> {
         if (!this.process) {
-            this.logger.log('stop requested but no process is running');
+            this.logger.debug('stop requested but no process is running');
             return;
         }
         const proc = this.process;
@@ -139,19 +139,19 @@ export class ProcessManager {
         this.bridgeClient.disconnect();
         this.stopBridgePolling();
         this.stopStartupErrorPolling();
-        this.logger.log(`stop requested for pid=${proc.pid ?? 'unknown'}`);
+        this.logger.debug(`stop requested for pid=${proc.pid ?? 'unknown'}`);
 
         return new Promise((resolve) => {
-            this.logger.log('sending SIGTERM');
+            this.logger.debug('sending SIGTERM');
             proc.kill('SIGTERM');
             const timer = setTimeout(() => {
-                this.logger.log('SIGTERM timeout reached; sending SIGKILL');
+                this.logger.debug('SIGTERM timeout reached; sending SIGKILL');
                 proc.kill('SIGKILL');
                 resolve();
             }, 200);
             proc.on('close', () => {
                 clearTimeout(timer);
-                this.logger.log('process closed during stop');
+                this.logger.debug('process closed during stop');
                 resolve();
             });
         });
@@ -166,9 +166,9 @@ export class ProcessManager {
     }
 
     public async reloadModule(moduleName: string): Promise<void> {
-        this.logger.log(`bridge reload requested: module=${moduleName} connected=${this.bridgeClient.connected}`);
+        this.logger.debug(`bridge reload requested: module=${moduleName} connected=${this.bridgeClient.connected}`);
         await this.bridgeClient.reload(moduleName);
-        this.logger.log(`bridge reload completed: module=${moduleName}`);
+        this.logger.debug(`bridge reload completed: module=${moduleName}`);
     }
 
     private detectLovePath(): string {
@@ -180,12 +180,12 @@ export class ProcessManager {
             ];
             for (const p of commonPaths) {
                 if (fs.existsSync(p)) {
-                    this.logger.log(`auto-detected Love executable at "${p}"`);
+                    this.logger.debug(`auto-detected Love executable at "${p}"`);
                     return p;
                 }
             }
         }
-        this.logger.log('falling back to "love" from PATH');
+        this.logger.debug('falling back to "love" from PATH');
         return 'love';
     }
 
@@ -210,7 +210,7 @@ export class ProcessManager {
             this.versionCache.set(lovePath, version);
             return version;
         } catch (error) {
-            this.logger.log(`failed to detect Love version: ${String(error)}`);
+            this.logger.debug(`failed to detect Love version: ${String(error)}`);
             this.versionCache.set(lovePath, null);
             return null;
         }
@@ -225,7 +225,7 @@ export class ProcessManager {
             return;
         }
 
-        this.logger.log(`bridge polling started: portFile="${this.bridgePortFile}"`);
+        this.logger.debug(`bridge polling started: portFile="${this.bridgePortFile}"`);
         this.bridgePollTimer = setInterval(() => {
             void this.tryConnectBridge();
         }, 250);
@@ -236,7 +236,7 @@ export class ProcessManager {
             return;
         }
 
-        this.logger.log(`startup error polling started: file="${this.startupErrorFile}"`);
+        this.logger.debug(`startup error polling started: file="${this.startupErrorFile}"`);
         this.startupErrorPollTimer = setInterval(() => {
             this.flushStartupErrorFile();
         }, 100);
@@ -246,7 +246,7 @@ export class ProcessManager {
         if (this.bridgePollTimer) {
             clearInterval(this.bridgePollTimer);
             this.bridgePollTimer = null;
-            this.logger.log('bridge polling stopped');
+            this.logger.debug('bridge polling stopped');
         }
     }
 
@@ -254,7 +254,7 @@ export class ProcessManager {
         if (this.startupErrorPollTimer) {
             clearInterval(this.startupErrorPollTimer);
             this.startupErrorPollTimer = null;
-            this.logger.log('startup error polling stopped');
+            this.logger.debug('startup error polling stopped');
         }
     }
 
@@ -284,7 +284,7 @@ export class ProcessManager {
             this.stopBridgePolling();
         } catch (error) {
             this.lastBridgePort = null;
-            this.logger.log(`bridge connect failed: port=${port} error=${String(error)}`);
+            this.logger.debug(`bridge connect failed: port=${port} error=${String(error)}`);
         }
     }
 

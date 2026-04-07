@@ -36,11 +36,11 @@ export async function activate(context: vscode.ExtensionContext) {
     let isLaunching = false;
     let lastLaunchTime = 0;
     const LAUNCH_COOLDOWN_MS = 1000;
-    activationLogger.log(`activate: workspaceRoot="${workspaceRoot}" extensionPath="${context.extensionPath}"`);
+    activationLogger.debug(`activate: workspaceRoot="${workspaceRoot}" extensionPath="${context.extensionPath}"`);
 
     const launch = async (reason: string) => {
         if (isLaunching) {
-            activationLogger.log(`launch skipped: already launching (reason="${reason}")`);
+            activationLogger.debug(`launch skipped: already launching (reason="${reason}")`);
             return;
         }
 
@@ -87,13 +87,19 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         if (!candidate) {
-            activationLogger.log('launch cancelled: no entry point selected');
+            activationLogger.debug('launch cancelled: no entry point selected');
             return;
         }
 
         activeEntryPoint = candidate;
         activationLogger.info(describeEntryPointSelection(candidate, selectionMode));
 
+        const isReload = reason.startsWith('watcher');
+        const shouldClear = isReload ? projectConfig.fileLogs.reloadClear : projectConfig.fileLogs.sessionClear;
+        if (shouldClear) {
+            const clearMessage = isReload ? '--- Logs Cleared for Reload ---' : '--- Logs Cleared for New Session ---';
+            await fileLogStore?.clear(clearMessage);
+        }
         fileLogStore?.setActive(true);
         // Update watcher for the new app/config
         if (watcher) {
@@ -112,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         // Rebuild bootstrap on every launch so new/deleted project files are reflected
-        activationLogger.log(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval} proxyErrorLogs=${projectConfig.proxyErrorLogs} inferLogTypes=${projectConfig.inferLogTypes} entryPoint="${candidate.mainFileRelativePath}"`);
+        activationLogger.debug(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval} proxyErrorLogs=${projectConfig.proxyErrorLogs} inferLogTypes=${projectConfig.inferLogTypes} entryPoint="${candidate.mainFileRelativePath}"`);
         const bootstrapDir = bootstrapManager.prepare(workspaceRoot, candidate.absoluteAppRootPath, hotPollInterval, projectConfig.proxyErrorLogs);
         const success = await processManager.launch(
             bootstrapDir,
@@ -123,7 +129,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         if (success) {
             statusBar.update(ExtensionState.Running);
-            activationLogger.log('status bar updated: running');
+            activationLogger.debug('status bar updated: running');
         }
         lastLaunchTime = Date.now();
     } catch (error) {
@@ -134,22 +140,22 @@ export async function activate(context: vscode.ExtensionContext) {
 };
 
     const stop = async () => {
-        activationLogger.log('manual stop requested');
+        activationLogger.debug('manual stop requested');
         fileLogStore?.setActive(false);
         await processManager.stop();
         activeEntryPoint = undefined;
         statusBar.update(ExtensionState.Stopped);
-        activationLogger.log('status bar updated: stopped');
+        activationLogger.debug('status bar updated: stopped');
     };
 
     processManager.onCrash = () => {
         activeEntryPoint = undefined;
         fileLogStore?.setActive(false);
         statusBar.update(ExtensionState.Stopped);
-        activationLogger.log('process crash handler invoked; status bar updated to stopped');
+        activationLogger.debug('process crash handler invoked; status bar updated to stopped');
         vscode.window.showWarningMessage('Love2D stopped unexpectedly. I can try to restart it.', 'Restart')
             .then(choice => {
-                activationLogger.log(`crash dialog choice: ${choice ?? 'dismissed'}`);
+                activationLogger.debug(`crash dialog choice: ${choice ?? 'dismissed'}`);
                 if (choice === 'Restart') {
                     void launch('crash recovery restart');
                 }
@@ -157,10 +163,10 @@ export async function activate(context: vscode.ExtensionContext) {
     };
 
     const handleReloadEvent = async (event: ReloadEvent) => {
-        reloadLogger.log(`callback entered: type=${event.type} path=${event.relativePath} running=${processManager.isRunning()}`);
+        reloadLogger.debug(`callback entered: type=${event.type} path=${event.relativePath} running=${processManager.isRunning()}`);
         const scopedEvent = toActiveEntryPointReloadEvent(event, activeEntryPoint, projectConfig.watchScope);
         if (!scopedEvent) {
-            reloadLogger.log('callback ignored because file is outside the active app root/project scope');
+            reloadLogger.debug('callback ignored because file is outside the active app root/project scope');
             return;
         }
 
@@ -168,7 +174,7 @@ export async function activate(context: vscode.ExtensionContext) {
             ...scopedEvent,
             appRoot: activeEntryPoint?.appRootRelativePath
         });
-        reloadLogger.log(`decision: classification=${decision.classification} action=${decision.action} reason="${decision.reason}"`);
+        reloadLogger.debug(`decision: classification=${decision.classification} action=${decision.action} reason="${decision.reason}"`);
 
         if (decision.action === 'none') {
             return;
@@ -178,17 +184,17 @@ export async function activate(context: vscode.ExtensionContext) {
         if (decision.action === 'restart') {
             const now = Date.now();
             if (isLaunching) {
-                reloadLogger.log(`restart skipped: currently launching (path="${event.relativePath}")`);
+                reloadLogger.debug(`restart skipped: currently launching (path="${event.relativePath}")`);
                 return;
             }
             if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
-                reloadLogger.log(`restart skipped: launch cooldown active (path="${event.relativePath}" elapsed=${now - lastLaunchTime}ms)`);
+                reloadLogger.debug(`restart skipped: launch cooldown active (path="${event.relativePath}" elapsed=${now - lastLaunchTime}ms)`);
                 return;
             }
         }
 
         if (!processManager.isRunning()) {
-            reloadLogger.log('callback ignored because process is not running');
+            reloadLogger.debug('callback ignored because process is not running');
             return;
         }
 
@@ -198,10 +204,10 @@ export async function activate(context: vscode.ExtensionContext) {
                     await processManager.reloadModule(decision.moduleName);
                     return;
                 } catch (error) {
-                    reloadLogger.log(`bridge reload failed for ${decision.moduleName}; falling back to restart: ${String(error)}`);
+                    reloadLogger.debug(`bridge reload failed for ${decision.moduleName}; falling back to restart: ${String(error)}`);
                 }
             } else {
-                reloadLogger.log(`bridge reload unavailable for ${decision.moduleName}; bridge not connected, falling back to restart`);
+                reloadLogger.debug(`bridge reload unavailable for ${decision.moduleName}; bridge not connected, falling back to restart`);
             }
         }
 
@@ -214,7 +220,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const configPath = await initializeProjectConfig(workspaceRoot);
         const document = await vscode.workspace.openTextDocument(configPath);
         await vscode.window.showTextDocument(document);
-        activationLogger.log(`initialized project config at "${configPath}"`);
+        activationLogger.debug(`initialized project config at "${configPath}"`);
     };
 
     context.subscriptions.push(

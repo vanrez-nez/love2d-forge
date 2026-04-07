@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { FileLogStore } from './fileLogStore';
 
-export type LogLevel = 'error' | 'warn' | 'info' | 'trace';
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
 class LogClock {
     private readonly startedAt = Date.now();
@@ -44,6 +44,10 @@ export class Logger {
 
     public log(message: string): void {
         this.write('trace', message);
+    }
+
+    public debug(message: string): void {
+        this.write('debug', message);
     }
 
     public info(message: string): void {

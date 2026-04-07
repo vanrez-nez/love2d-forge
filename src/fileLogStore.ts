@@ -10,10 +10,24 @@ export class FileLogStore {
     constructor(
         private readonly filePath: string,
         private readonly maxLines = 1000
-    ) {}
+    ) { }
 
     public setActive(active: boolean): void {
         this.isActive = active;
+    }
+
+    public async clear(header?: string): Promise<void> {
+        this.lines.length = 0;
+        this.partialLine = '';
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+        }
+        if (header) {
+            this.lines.push(header);
+        }
+        await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
+        await fs.promises.writeFile(this.filePath, header ? `${header}\n` : '', 'utf8');
     }
 
     public write(line: string): void {

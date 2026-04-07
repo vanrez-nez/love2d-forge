@@ -33,6 +33,8 @@ Project configuration is completely optional. If no project config exists, Love2
 - `fileLogs.enabled: false`
 - `fileLogs.outputFile: "love2d.log"`
 - `fileLogs.logLines: 1000`
+- `fileLogs.sessionClear: false`
+- `fileLogs.reloadClear: false`
 
 When you want a project config, run **Love2D: Init Config**. This creates `.love2d-forge/config.json`.
 
@@ -54,7 +56,9 @@ Example:
   "fileLogs": {
     "enabled": false,
     "outputFile": "love2d.log",
-    "logLines": 1000
+    "logLines": 1000,
+    "sessionClear": false,
+    "reloadClear": true
   }
 }
 ```
@@ -74,6 +78,11 @@ How it works:
   - **Wildcard**: `"*"` (shows all logs).
   - Default is `["info", "warn", "error"]` to exclude noisy internal app state.
 - `fileLogs` controls optional persisted output logging for the last N lines.
+  - `enabled`: Toggles file logging.
+  - `outputFile`: Path to the log file.
+  - `logLines`: Maximum lines to keep.
+  - `sessionClear`: If `true`, the log file is wiped clean at the start of every manual session or manual restart.
+  - `reloadClear`: If `true`, the log file is wiped clean only when an automatic hard-reload is triggered by the file watcher.
 
 | Setting | Description | Default |
 |---|---|---|

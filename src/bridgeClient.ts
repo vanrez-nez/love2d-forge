@@ -34,7 +34,7 @@ export class BridgeClient {
     constructor(
         private readonly logger: Logger,
         private readonly inferLogTypes = true
-    ) {}
+    ) { }
 
     public get connected(): boolean {
         return this._connected;
@@ -45,14 +45,14 @@ export class BridgeClient {
             this.disconnect();
         }
 
-        this.logger.log(`bridge connect requested: port=${port}`);
+        this.logger.debug(`bridge connect requested: port=${port}`);
         return new Promise<void>((resolve, reject) => {
             const socket = new net.Socket();
             this.socket = socket;
 
             socket.on('connect', () => {
                 this._connected = true;
-                this.logger.log(`bridge connected: port=${port}`);
+                this.logger.debug(`bridge connected: port=${port}`);
                 resolve();
             });
 
@@ -124,7 +124,7 @@ export class BridgeClient {
                     const message = JSON.parse(line) as BridgeResponse;
                     this.handleMessage(message);
                 } catch {
-                    this.logger.log(`bridge received malformed message: ${line}`);
+                    this.logger.debug(`bridge received malformed message: ${line}`);
                 }
             }
 
@@ -139,13 +139,13 @@ export class BridgeClient {
         }
 
         if (message.id === undefined) {
-            this.logger.log(`bridge message without id ignored: type=${message.type}`);
+            this.logger.debug(`bridge message without id ignored: type=${message.type}`);
             return;
         }
 
         const pending = this.pendingRequests.get(message.id);
         if (!pending) {
-            this.logger.log(`bridge response without pending request ignored: id=${message.id}`);
+            this.logger.debug(`bridge response without pending request ignored: id=${message.id}`);
             return;
         }
 
@@ -170,7 +170,7 @@ export class BridgeClient {
         }
 
         if (hadConnection) {
-            this.logger.log(`bridge disconnected: ${reason}`);
+            this.logger.debug(`bridge disconnected: ${reason}`);
         }
     }
 
@@ -182,18 +182,18 @@ export class BridgeClient {
 
         const inferred = inferBridgePrint(message);
         switch (inferred.level) {
-        case 'ERROR':
-            this.logger.error(inferred.message);
-            break;
-        case 'WARN':
-            this.logger.warn(inferred.message);
-            break;
-        case 'INFO':
-            this.logger.info(inferred.message);
-            break;
-        default:
-            this.logger.log(inferred.message);
-            break;
+            case 'ERROR':
+                this.logger.error(inferred.message);
+                break;
+            case 'WARN':
+                this.logger.warn(inferred.message);
+                break;
+            case 'INFO':
+                this.logger.info(inferred.message);
+                break;
+            default:
+                this.logger.log(inferred.message);
+                break;
         }
     }
 }

@@ -42,7 +42,7 @@ export class FileWatcher {
         this.watcher.onDidCreate((uri) => this.schedule('create', uri));
         this.watcher.onDidDelete((uri) => this.schedule('delete', uri));
         
-        options.logger.log(`FileWatcher initialized: scope=${watchScope} base=${pattern.base} pattern=${pattern.pattern} gitignore=${!!this.gitignore}`);
+        options.logger.debug(`FileWatcher initialized: scope=${watchScope} base=${pattern.base} pattern=${pattern.pattern} gitignore=${!!this.gitignore}`);
     }
 
     private loadGitignore() {
@@ -51,9 +51,9 @@ export class FileWatcher {
             try {
                 const content = fs.readFileSync(gitignorePath, 'utf8');
                 this.gitignore = ignore().add(content);
-                this.options.logger.log('loaded .gitignore rules');
+                this.options.logger.debug('loaded .gitignore rules');
             } catch (error) {
-                this.options.logger.log(`failed to read .gitignore: ${String(error)}`);
+                this.options.logger.debug(`failed to read .gitignore: ${String(error)}`);
             }
         }
     }
@@ -69,7 +69,7 @@ export class FileWatcher {
         }
 
         this.pendingEvent = { type, relativePath };
-        this.options.logger.log(`watcher event: type=${type} path="${relativePath}"`);
+        this.options.logger.debug(`watcher event: type=${type} path="${relativePath}"`);
 
         if (this.timer) {
             clearTimeout(this.timer);

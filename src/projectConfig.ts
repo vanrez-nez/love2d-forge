@@ -5,6 +5,8 @@ export interface ProjectFileLogConfig {
     enabled: boolean;
     outputFile: string;
     logLines: number;
+    sessionClear: boolean;
+    reloadClear: boolean;
 }
 
 export interface ProjectConfig {
@@ -29,7 +31,9 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
     fileLogs: {
         enabled: false,
         outputFile: 'love2d.log',
-        logLines: 1000
+        logLines: 1000,
+        sessionClear: false,
+        reloadClear: false
     }
 };
 
@@ -65,7 +69,9 @@ export async function readProjectConfigWithDiagnostics(workspaceRoot: string): P
             fileLogs: {
                 enabled: parsed.fileLogs?.enabled ?? DEFAULT_PROJECT_CONFIG.fileLogs.enabled,
                 outputFile: parsed.fileLogs?.outputFile ?? DEFAULT_PROJECT_CONFIG.fileLogs.outputFile,
-                logLines: normalizeLogLines(parsed.fileLogs?.logLines)
+                logLines: normalizeLogLines(parsed.fileLogs?.logLines),
+                sessionClear: parsed.fileLogs?.sessionClear ?? DEFAULT_PROJECT_CONFIG.fileLogs.sessionClear,
+                reloadClear: parsed.fileLogs?.reloadClear ?? DEFAULT_PROJECT_CONFIG.fileLogs.reloadClear
             }
         };
 
