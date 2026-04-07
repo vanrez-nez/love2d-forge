@@ -102,7 +102,7 @@ async function run() {
         } else {
             console.log(`🚀 Publishing to Open VSX...`);
             try {
-                const cmd = `npx ovsx publish ${token ? `--token ${token}` : ''}`;
+                const cmd = `npx ovsx publish ${token ? `--pat ${token}` : ''}`;
                 execSync(cmd, { stdio: 'inherit' });
                 results.ovsx = { status: 'Success', message: `Published version ${version}` };
             } catch (err) {
