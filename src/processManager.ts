@@ -68,7 +68,6 @@ export class ProcessManager {
         const loveVersion = this.detectLoveVersion(lovePath);
         if (loveVersion) {
             this.logger.info(`Version: ${loveVersion}`);
-            this.logger.log(`detected Love version: ${loveVersion}`);
         }
         this.logger.info(`Launching: ${lovePath} ${bootstrapDir}`);
         this.logger.log('output channel cleared and shown');
