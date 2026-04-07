@@ -12,7 +12,9 @@ export interface ProjectConfig {
     inferLogTypes: boolean;
     autoDiscovery: boolean;
     autoDiscoverySearchDepth: number;
-    location?: string | string[];
+    locations?: string | string[];
+    watchScope: 'location' | 'project';
+    watchExclude?: string[];
     fileLogs: ProjectFileLogConfig;
 }
 
@@ -21,6 +23,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
     inferLogTypes: true,
     autoDiscovery: true,
     autoDiscoverySearchDepth: 2,
+    watchScope: 'location',
     fileLogs: {
         enabled: false,
         outputFile: 'love2d.log',
@@ -47,13 +50,15 @@ export async function readProjectConfigWithDiagnostics(workspaceRoot: string): P
     try {
         const raw = await fs.promises.readFile(configPath, 'utf8');
         const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
-        const location = normalizeLocation(parsed.location);
+        const locations = normalizeLocations(parsed.locations);
         const config: ProjectConfig = {
             proxyErrorLogs: parsed.proxyErrorLogs ?? DEFAULT_PROJECT_CONFIG.proxyErrorLogs,
             inferLogTypes: parsed.inferLogTypes ?? DEFAULT_PROJECT_CONFIG.inferLogTypes,
             autoDiscovery: parsed.autoDiscovery ?? DEFAULT_PROJECT_CONFIG.autoDiscovery,
             autoDiscoverySearchDepth: normalizeSearchDepth(parsed.autoDiscoverySearchDepth),
-            ...(location !== undefined ? { location } : {}),
+            ...(locations !== undefined ? { locations } : {}),
+            watchScope: normalizeWatchScope(parsed.watchScope),
+            watchExclude: normalizeStringArray(parsed.watchExclude),
             fileLogs: {
                 enabled: parsed.fileLogs?.enabled ?? DEFAULT_PROJECT_CONFIG.fileLogs.enabled,
                 outputFile: parsed.fileLogs?.outputFile ?? DEFAULT_PROJECT_CONFIG.fileLogs.outputFile,
@@ -65,7 +70,7 @@ export async function readProjectConfigWithDiagnostics(workspaceRoot: string): P
             config,
             messages: [
                 `Loaded project config from "${configPath}"`,
-                `Project config launch settings: location=${formatLocationForLog(config.location)} autoDiscovery=${config.autoDiscovery} autoDiscoverySearchDepth=${config.autoDiscoverySearchDepth}`
+                `Project config launch settings: locations=${formatLocationsForLog(config.locations)} watchScope=${config.watchScope} autoDiscovery=${config.autoDiscovery}`
             ]
         };
     } catch (error) {
@@ -74,13 +79,13 @@ export async function readProjectConfigWithDiagnostics(workspaceRoot: string): P
             config: DEFAULT_PROJECT_CONFIG,
             messages: [
                 `Failed to read project config at "${configPath}": ${message}`,
-                `Using default project config: location=unset autoDiscovery=${DEFAULT_PROJECT_CONFIG.autoDiscovery} autoDiscoverySearchDepth=${DEFAULT_PROJECT_CONFIG.autoDiscoverySearchDepth}`
+                `Using default project config: locations=unset autoDiscovery=${DEFAULT_PROJECT_CONFIG.autoDiscovery} autoDiscoverySearchDepth=${DEFAULT_PROJECT_CONFIG.autoDiscoverySearchDepth}`
             ]
         };
     }
 }
 
-export function normalizeLocation(value: unknown): string | string[] | undefined {
+export function normalizeLocations(value: unknown): string | string[] | undefined {
     if (typeof value === 'string') {
         return normalizeLocationString(value);
     }
@@ -98,6 +103,25 @@ export function normalizeLocation(value: unknown): string | string[] | undefined
     }
 
     return locations;
+}
+
+function normalizeWatchScope(value: unknown): 'location' | 'project' {
+    if (value === 'project') {
+        return 'project';
+    }
+    return 'location';
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+
+    const paths = value
+        .map((item) => (typeof item === 'string' ? item.trim() : undefined))
+        .filter((item): item is string => !!item);
+
+    return paths.length > 0 ? paths : undefined;
 }
 
 function normalizeLocationString(value: unknown): string | undefined {
@@ -154,14 +178,14 @@ function normalizeSearchDepth(value: number | undefined): number {
     return Math.max(0, Math.floor(value));
 }
 
-function formatLocationForLog(location: string | string[] | undefined): string {
-    if (location === undefined) {
+function formatLocationsForLog(locations: string | string[] | undefined): string {
+    if (locations === undefined) {
         return 'unset';
     }
 
-    if (Array.isArray(location)) {
-        return `[${location.map((item) => `"${item}"`).join(', ')}]`;
+    if (Array.isArray(locations)) {
+        return `[${locations.map((item) => `"${item}"`).join(', ')}]`;
     }
 
-    return `"${location}"`;
+    return `"${locations}"`;
 }

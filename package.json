@@ -89,5 +89,8 @@
     "ovsx": "^0.10.10",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5"
   }
 }

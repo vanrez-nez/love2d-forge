@@ -29,12 +29,23 @@ export async function activate(context: vscode.ExtensionContext) {
     const reloadLogger = logger.child('reload');
     const bootstrapManager = new BootstrapManager(workspaceRoot, context.extensionPath, logger.child('bootstrap'));
     const statusBar = new StatusBarController();
-    let activeEntryPoint: Awaited<ReturnType<typeof selectEntryPointCandidate>> | undefined;
+    let activeEntryPoint: EntryPointCandidate | undefined;
+    let watcher: FileWatcher | undefined;
+    let isLaunching = false;
+    let lastLaunchTime = 0;
+    const LAUNCH_COOLDOWN_MS = 1000;
     activationLogger.log(`activate: workspaceRoot="${workspaceRoot}" extensionPath="${context.extensionPath}"`);
 
     const launch = async (reason: string) => {
-        const configReadResult = await readProjectConfigWithDiagnostics(workspaceRoot);
-        projectConfig = configReadResult.config;
+        if (isLaunching) {
+            activationLogger.log(`launch skipped: already launching (reason="${reason}")`);
+            return;
+        }
+
+        isLaunching = true;
+        try {
+            const configReadResult = await readProjectConfigWithDiagnostics(workspaceRoot);
+            projectConfig = configReadResult.config;
         for (const message of configReadResult.messages) {
             activationLogger.info(message);
         }
@@ -80,6 +91,22 @@ export async function activate(context: vscode.ExtensionContext) {
         activeEntryPoint = candidate;
         activationLogger.info(describeEntryPointSelection(candidate, selectionMode));
 
+        // Update watcher for the new app/config
+        if (watcher) {
+            watcher.dispose();
+        }
+        watcher = new FileWatcher({
+            workspaceRoot,
+            appRoot: candidate.appRootRelativePath,
+            watchScope: projectConfig.watchScope,
+            watchExclude: [
+                ...(projectConfig.watchExclude ?? []),
+                projectConfig.fileLogs.outputFile
+            ],
+            logger: logger.child('watcher'),
+            onReload: (event) => void handleReloadEvent(event)
+        });
+
         // Rebuild bootstrap on every launch so new/deleted project files are reflected
         activationLogger.log(`launch pipeline start: reason="${reason}" hotPollIntervalMs=${hotPollInterval} proxyErrorLogs=${projectConfig.proxyErrorLogs} inferLogTypes=${projectConfig.inferLogTypes} entryPoint="${candidate.mainFileRelativePath}"`);
         const bootstrapDir = bootstrapManager.prepare(candidate.absoluteAppRootPath, hotPollInterval, projectConfig.proxyErrorLogs);
@@ -94,7 +121,13 @@ export async function activate(context: vscode.ExtensionContext) {
             statusBar.update(ExtensionState.Running);
             activationLogger.log('status bar updated: running');
         }
-    };
+        lastLaunchTime = Date.now();
+    } catch (error) {
+        activationLogger.error(`launch failed: ${String(error)}`);
+    } finally {
+        isLaunching = false;
+    }
+};
 
     const stop = async () => {
         activationLogger.log('manual stop requested');
@@ -119,14 +152,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const handleReloadEvent = async (event: ReloadEvent) => {
         reloadLogger.log(`callback entered: type=${event.type} path="${event.relativePath}" running=${processManager.isRunning()}`);
-        const scopedEvent = toActiveEntryPointReloadEvent(event, activeEntryPoint, reloadLogger);
+        const scopedEvent = toActiveEntryPointReloadEvent(event, activeEntryPoint, reloadLogger, projectConfig.watchScope);
         if (!scopedEvent) {
-            reloadLogger.log('callback ignored because file is outside the active app root');
+            reloadLogger.log('callback ignored because file is outside the active app root/project scope');
             return;
         }
 
         const decision = classifyReloadEvent(scopedEvent);
         reloadLogger.log(`decision: classification=${decision.classification} action=${decision.action} reason="${decision.reason}"`);
+
+        // Apply safety checks only for 'restart' actions. Hot-swaps bypass these.
+        if (decision.action === 'restart') {
+            const now = Date.now();
+            if (isLaunching) {
+                reloadLogger.log(`restart skipped: currently launching (path="${event.relativePath}")`);
+                return;
+            }
+            if (now - lastLaunchTime < LAUNCH_COOLDOWN_MS) {
+                reloadLogger.log(`restart skipped: launch cooldown active (path="${event.relativePath}" elapsed=${now - lastLaunchTime}ms)`);
+                return;
+            }
+        }
+
         if (!processManager.isRunning()) {
             reloadLogger.log('callback ignored because process is not running');
             return;
@@ -148,9 +195,7 @@ export async function activate(context: vscode.ExtensionContext) {
         await launch(`watcher ${event.type} ${event.relativePath} -> ${decision.classification}: ${decision.reason}`);
     };
 
-    const watcher = new FileWatcher(workspaceRoot, logger.child('watcher'), (event) => {
-        void handleReloadEvent(event);
-    });
+    // Watcher is initialized in 'launch'
 
     const initConfig = async () => {
         const configPath = await initializeProjectConfig(workspaceRoot);
@@ -167,7 +212,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { dispose: () => { void fileLogStore?.flush(); } },
         processManager,
         statusBar,
-        watcher
+        { dispose: () => watcher?.dispose() }
     );
 }
 
@@ -176,27 +221,32 @@ export function deactivate() {}
 function toActiveEntryPointReloadEvent(
     event: ReloadEvent,
     activeEntryPoint: EntryPointCandidate | undefined,
-    logger: Logger
+    logger: Logger,
+    watchScope: 'location' | 'project' = 'location'
 ): ReloadEvent | undefined {
     if (!activeEntryPoint) {
         return event;
     }
 
-    const appRoot = activeEntryPoint.appRootRelativePath;
-    if (!appRoot) {
-        return event;
-    }
-
     const normalizedPath = event.relativePath.replace(/\\/g, '/');
-    if (normalizedPath === appRoot || normalizedPath.startsWith(`${appRoot}/`)) {
-        const scopedPath = normalizedPath.slice(appRoot.length).replace(/^\/+/, '');
-        logger.log(`reload path rebased from "${normalizedPath}" to "${scopedPath}" for active app root "${appRoot}"`);
+
+    // 1. Check main app root
+    const appRoot = activeEntryPoint.appRootRelativePath;
+    if (appRoot === '' || normalizedPath === appRoot || normalizedPath.startsWith(`${appRoot}/`)) {
+        const scopedPath = appRoot === '' ? normalizedPath : normalizedPath.slice(appRoot.length).replace(/^\/+/, '');
+        logger.log(`reload path rebased from "${normalizedPath}" to "${scopedPath}" for active app root "${appRoot || '.'}"`);
         return {
             ...event,
             relativePath: scopedPath
         };
     }
 
-    logger.log(`reload path "${normalizedPath}" is outside active app root "${appRoot}"`);
+    // 2. If project scope is enabled, allow files outside the app root
+    if (watchScope === 'project') {
+        logger.log(`reload path "${normalizedPath}" accepted in project scope (outside app root "${appRoot || '.'}")`);
+        return event;
+    }
+
+    logger.log(`reload path "${normalizedPath}" is outside active app root and watchScope is "location"`);
     return undefined;
 }

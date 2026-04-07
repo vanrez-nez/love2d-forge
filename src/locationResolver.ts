@@ -41,7 +41,8 @@ export async function resolveEntryPoint(
     projectConfig: ProjectConfig
 ): Promise<ResolvedEntryPoint> {
     const messages: string[] = [];
-    const configured = resolveConfiguredCandidates(workspaceRoot, projectConfig.location);
+    const configured = resolveConfiguredCandidates(workspaceRoot, projectConfig.locations);
+    
     if (configured.candidates.length > 0) {
         if (configured.candidates.length === 1) {
             return { candidate: configured.candidates[0], messages };
@@ -53,9 +54,9 @@ export async function resolveEntryPoint(
     if (configured.hadConfiguredLocation) {
         const missingLocations = configured.invalidLocations.length > 0
             ? configured.invalidLocations
-            : Array.isArray(projectConfig.location)
-                ? projectConfig.location
-                : [projectConfig.location];
+            : Array.isArray(projectConfig.locations)
+                ? projectConfig.locations
+                : [projectConfig.locations];
         for (const location of missingLocations) {
             if (location) {
                 messages.push(`Defined location not found at "${location}"`);
@@ -171,33 +172,35 @@ export async function discoverEntryPointCandidates(
 
 export function resolveConfiguredEntryPointCandidates(
     workspaceRoot: string,
-    location: ProjectConfig['location']
+    locations: ProjectConfig['locations']
 ): EntryPointCandidate[] {
-    return resolveConfiguredCandidates(workspaceRoot, location).candidates;
+    return resolveConfiguredCandidates(workspaceRoot, locations).candidates;
 }
 
 export async function selectEntryPointCandidate(candidates: EntryPointCandidate[]): Promise<EntryPointCandidate | undefined> {
     return selectEntryPointCandidateWithLoading(Promise.resolve(candidates));
 }
 
-function resolveConfiguredCandidates(workspaceRoot: string, location: ProjectConfig['location']): {
+function resolveConfiguredCandidates(workspaceRoot: string, locations: ProjectConfig['locations']): {
     candidates: EntryPointCandidate[];
     hadConfiguredLocation: boolean;
     invalidLocations: string[];
 } {
-    if (location === undefined) {
+    if (locations === undefined) {
         return { candidates: [], hadConfiguredLocation: false, invalidLocations: [] };
     }
 
-    const values = Array.isArray(location) ? location : [location];
+    const values = Array.isArray(locations) ? locations : [locations];
     const candidates: EntryPointCandidate[] = [];
     const invalidLocations: string[] = [];
     const seen = new Set<string>();
 
     for (const value of values) {
-        const candidate = createCandidate(workspaceRoot, value, 'config');
+        const pathValue = value;
+        
+        const candidate = createCandidate(workspaceRoot, pathValue, 'config');
         if (!candidate) {
-            invalidLocations.push(value);
+            invalidLocations.push(pathValue);
             continue;
         }
 
