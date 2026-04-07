@@ -23,8 +23,10 @@ export async function activate(context: vscode.ExtensionContext) {
         )
         : null;
     await fileLogStore?.initialize();
-    const processManager = new ProcessManager(fileLogStore, projectConfig.inferLogTypes);
-    const logger = new Logger(processManager.getOutputChannel(), 'love2d', fileLogStore);
+    const outputChannel = vscode.window.createOutputChannel('Love2D');
+    const logger = new Logger(outputChannel, 'love2d', fileLogStore);
+    logger.updateFilter(projectConfig.logFilter);
+    const processManager = new ProcessManager(logger, projectConfig.inferLogTypes);
     const activationLogger = logger.child('extension');
     const reloadLogger = logger.child('reload');
     const bootstrapManager = new BootstrapManager(workspaceRoot, context.extensionPath, logger.child('bootstrap'));
@@ -46,9 +48,10 @@ export async function activate(context: vscode.ExtensionContext) {
         try {
             const configReadResult = await readProjectConfigWithDiagnostics(workspaceRoot);
             projectConfig = configReadResult.config;
-        for (const message of configReadResult.messages) {
-            activationLogger.info(message);
-        }
+            logger.updateFilter(projectConfig.logFilter);
+            for (const message of configReadResult.messages) {
+                activationLogger.info(message);
+            }
         const config = vscode.workspace.getConfiguration('love2d');
         const executablePath = config.get<string>('executablePath') || '';
         const hotPollInterval = config.get<number>('hotPollInterval') || 500;

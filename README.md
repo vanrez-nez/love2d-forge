@@ -11,6 +11,7 @@ A Zero-Friction Entry VS Code extension for Love2D projects that launches throug
 - **Flexible Watch Scopes**: Choose between watching only the active app folder or the entire project workspace.
 - **Process Management**: Integrated process control with stdout/stderr piped to the VS Code Output Channel.
 - **Visual Feedback**: Real-time status bar updates for running and stopped states.
+- **Granular Log Whitelisting**: Control exactly which logs appear in the console by whitelisting specific levels (e.g. `info`) or scope:level pairs (e.g. `bridge:info`).
 
 ## Getting Started
 
@@ -28,6 +29,7 @@ Project configuration is completely optional. If no project config exists, Love2
 - `autoDiscoverySearchDepth: 2`
 - `locations: undefined`
 - `watchScope: "location"`
+- `logFilter: ["info", "warn", "error"]`
 - `fileLogs.enabled: false`
 - `fileLogs.outputFile: "love2d.log"`
 - `fileLogs.logLines: 1000`
@@ -48,6 +50,7 @@ Example:
   ],
   "watchScope": "project",
   "watchExclude": ["temp/**", "old_assets/**"],
+  "logFilter": ["info", "warn", "error", "bridge:trace"],
   "fileLogs": {
     "enabled": false,
     "outputFile": "love2d.log",
@@ -65,6 +68,11 @@ How it works:
   - `"location"` (Default): Only watches files inside the active app's folder.
   - `"project"`: Watches the entire workspace, useful for shared libraries.
 - `watchExclude` allows manual overrides to ignore specific files or folders. Note that **.gitignore** rules and internal extension files are always ignored automatically.
+- `logFilter` sets a whitelist for log events. It supports:
+  - **Levels**: `"info"`, `"warn"`, `"error"`, `"trace"`.
+  - **Scope Pairs**: `"bridge:info"`, `"process:trace"`.
+  - **Wildcard**: `"*"` (shows all logs).
+  - Default is `["info", "warn", "error"]` to exclude noisy internal app state.
 - `fileLogs` controls optional persisted output logging for the last N lines.
 
 | Setting | Description | Default |

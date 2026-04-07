@@ -4,12 +4,11 @@ import * as fs from 'fs';
 import { Logger, LogLevel } from './logger';
 import { BridgeClient } from './bridgeClient';
 import { getBridgePortFile, getStartupErrorFile } from './runtimePaths';
-import { FileLogStore } from './fileLogStore';
+import { readProjectConfigWithDiagnostics } from './projectConfig';
 
 export class ProcessManager {
     private process: childProcess.ChildProcess | null = null;
     private outputChannel: vscode.OutputChannel;
-    private rootLogger: Logger;
     private logger: Logger;
     private bridgeClient: BridgeClient;
     private readonly versionCache = new Map<string, string | null>();
@@ -24,13 +23,12 @@ export class ProcessManager {
     public onCrash: (() => void) | null = null;
 
     constructor(
-        private readonly fileLogStore?: FileLogStore | null,
+        private readonly rootLogger: Logger,
         inferLogTypes = true
     ) {
-        this.outputChannel = vscode.window.createOutputChannel('Love2D');
-        this.rootLogger = new Logger(this.outputChannel, 'love2d', this.fileLogStore);
-        this.logger = this.rootLogger.child('process');
-        this.bridgeClient = new BridgeClient(this.rootLogger.child('bridge'), inferLogTypes);
+        this.outputChannel = rootLogger.getOutputChannel();
+        this.logger = rootLogger.child('process');
+        this.bridgeClient = new BridgeClient(rootLogger.child('bridge'), inferLogTypes);
     }
 
     public async launch(bootstrapDir: string, workspaceRoot: string, launchCwd: string, executablePath: string, reason: string): Promise<boolean> {
@@ -65,6 +63,13 @@ export class ProcessManager {
         this.outputChannel.clear();
         this.outputPartialLine = false;
         this.outputChannel.show(true);
+        const configRes = await readProjectConfigWithDiagnostics(workspaceRoot);
+        const config = configRes.config;
+        for (const msg of configRes.messages) {
+            this.logger.log(msg);
+        }
+        this.rootLogger.updateFilter(config.logFilter);
+
         const loveVersion = this.detectLoveVersion(lovePath);
         if (loveVersion) {
             this.logger.info(`Version: ${loveVersion}`);
@@ -295,20 +300,21 @@ export class ProcessManager {
             }
 
             this.startupErrorDelivered = true;
-            this.appendOutputLine(message, 'ERROR', 'runtime');
+            this.appendOutputLine(message, 'error', 'runtime');
             this.logger.error('startup error forwarded from temp file');
         } catch {
             return;
         }
     }
 
-    private appendOutput(chunk: string, level: LogLevel = 'INFO', scope = 'love'): void {
+    private appendOutput(chunk: string, level: LogLevel = 'info', scope = 'love'): void {
         if (!chunk) {
             return;
         }
 
         const normalized = chunk.replace(/\r\n/g, '\n');
         const parts = normalized.split('\n');
+        const logger = this.rootLogger.child(scope);
 
         for (let index = 0; index < parts.length; index += 1) {
             const line = parts[index] ?? '';
@@ -316,17 +322,15 @@ export class ProcessManager {
             const hasTrailingNewline = !isLast;
 
             if (!this.outputPartialLine) {
-                const prefixedLine = this.rootLogger.child(scope).formatMessage(level, line);
-                this.outputChannel.append(prefixedLine);
-                this.fileLogStore?.appendChunk(prefixedLine);
+                const prefix = logger.formatMessage(level, '');
+                logger.appendRaw(level, prefix);
+                logger.appendRaw(level, line);
             } else {
-                this.outputChannel.append(line);
-                this.fileLogStore?.appendChunk(line);
+                logger.appendRaw(level, line);
             }
 
             if (hasTrailingNewline) {
-                this.outputChannel.append('\n');
-                this.fileLogStore?.appendChunk('\n');
+                logger.appendRaw(level, '\n');
                 this.outputPartialLine = false;
             } else {
                 this.outputPartialLine = true;
@@ -334,10 +338,8 @@ export class ProcessManager {
         }
     }
 
-    private appendOutputLine(line: string, level: LogLevel = 'INFO', scope = 'love'): void {
-        const formattedLine = this.rootLogger.child(scope).formatMessage(level, line);
-        this.outputChannel.appendLine(formattedLine);
-        this.fileLogStore?.write(formattedLine);
+    private appendOutputLine(line: string, level: LogLevel = 'info', scope = 'love'): void {
+        this.rootLogger.child(scope).appendLine(level, line);
         this.outputPartialLine = false;
     }
 

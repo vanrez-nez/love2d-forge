@@ -15,6 +15,7 @@ export interface ProjectConfig {
     locations?: string | string[];
     watchScope: 'location' | 'project';
     watchExclude?: string[];
+    logFilter?: string | string[];
     fileLogs: ProjectFileLogConfig;
 }
 
@@ -24,6 +25,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
     autoDiscovery: true,
     autoDiscoverySearchDepth: 2,
     watchScope: 'location',
+    logFilter: ['info', 'warn', 'error'],
     fileLogs: {
         enabled: false,
         outputFile: 'love2d.log',
@@ -59,6 +61,7 @@ export async function readProjectConfigWithDiagnostics(workspaceRoot: string): P
             ...(locations !== undefined ? { locations } : {}),
             watchScope: normalizeWatchScope(parsed.watchScope),
             watchExclude: normalizeStringArray(parsed.watchExclude),
+            logFilter: normalizeStringOrStringArray(parsed.logFilter),
             fileLogs: {
                 enabled: parsed.fileLogs?.enabled ?? DEFAULT_PROJECT_CONFIG.fileLogs.enabled,
                 outputFile: parsed.fileLogs?.outputFile ?? DEFAULT_PROJECT_CONFIG.fileLogs.outputFile,
@@ -135,6 +138,23 @@ function normalizeLocationString(value: unknown): string | undefined {
     }
 
     return trimmed.replace(/\\/g, '/');
+}
+
+function normalizeStringOrStringArray(value: unknown): string | string[] | undefined {
+    if (typeof value === 'string') {
+        const trimmed = value.trim().toLowerCase();
+        return trimmed ? trimmed : undefined;
+    }
+
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+
+    const arr = value
+        .map((item) => (typeof item === 'string' ? item.trim().toLowerCase() : undefined))
+        .filter((item): item is string => !!item);
+
+    return arr.length > 0 ? arr : undefined;
 }
 
 export async function initializeProjectConfig(workspaceRoot: string): Promise<string> {
