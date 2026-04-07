@@ -71,9 +71,12 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "package": "npm run compile && npm run lint && vsce package",
-    "publish:marketplace": "npm run compile && npm run lint && vsce publish",
-    "publish:ovsx": "npm run compile && npm run lint && ovsx publish",
-    "publish:all": "npm run publish:marketplace && npm run publish:ovsx"
+    "publish:marketplace": "npm run compile && npm run lint && node scripts/publish.mjs --target=marketplace",
+    "publish:ovsx": "npm run compile && npm run lint && node scripts/publish.mjs --target=ovsx",
+    "publish:all": "npm run compile && npm run lint && node scripts/publish.mjs --target=all",
+    "release:patch": "npm version patch && git push origin main --tags",
+    "release:minor": "npm version minor && git push origin main --tags",
+    "release:major": "npm version major && git push origin main --tags"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
