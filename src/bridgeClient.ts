@@ -97,7 +97,7 @@ export class BridgeClient {
 
         const id = ++this.nextRequestId;
         const payload = JSON.stringify({ ...command, id }) + '\n';
-        this.logger.log(`bridge send: cmd=${command.cmd} id=${id}`);
+        this.logger.log(`bridge send: id=${id} payload="${payload.trim()}"`);
 
         return new Promise<BridgeResponse>((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -119,6 +119,7 @@ export class BridgeClient {
             this.buffer = this.buffer.slice(newlineIndex + 1);
 
             if (line.length > 0) {
+                this.logger.log(`bridge receive: "${line}"`);
                 try {
                     const message = JSON.parse(line) as BridgeResponse;
                     this.handleMessage(message);
