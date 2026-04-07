@@ -195,13 +195,34 @@ local function write_port_file(port)
     file:close()
 end
 
+local function stitch_identity(func, new_table, old_table, seen)
+    if type(func) ~= "function" or seen[func] then return end
+    seen[func] = true
+    
+    local i = 1
+    while true do
+        local name, val = debug.getupvalue(func, i)
+        if not name then break end
+        
+        if val == new_table then
+            debug.setupvalue(func, i, old_table)
+        elseif type(val) == "function" then
+            stitch_identity(val, new_table, old_table, seen)
+        end
+        i = i + 1
+    end
+end
+
 local function merge_module(old_module, new_module)
-    for key in pairs(old_module) do
-        if new_module[key] == nil then
-            old_module[key] = nil
+    local seen = {}
+    -- Patch the new functions to use the old module identity (Identity Stitching)
+    for _, value in pairs(new_module) do
+        if type(value) == "function" then
+            stitch_identity(value, new_module, old_module, seen)
         end
     end
 
+    -- Patch the old module with new values
     for key, value in pairs(new_module) do
         old_module[key] = value
     end
@@ -223,11 +244,15 @@ local function reload_module(module_name)
         return false, "bridge is in degraded state after a previous runtime error; restart required"
     end
 
-    if not module_name or package.loaded[module_name] == nil then
-        return false, "module not loaded: " .. tostring(module_name)
+    if not module_name then
+        return false, "no module name provided"
     end
 
     local old_module = package.loaded[module_name]
+    if old_module == nil then
+        return false, "module not loaded: " .. tostring(module_name)
+    end
+
     package.loaded[module_name] = nil
 
     local ok, new_module = safe_call("module reload failed for " .. tostring(module_name), require, module_name)
@@ -413,6 +438,7 @@ local function start_server()
     local _, assigned_port = server:getsockname()
     write_port_file(assigned_port)
     log("bridge listening on port " .. tostring(assigned_port))
+    log("full package.path: " .. tostring(package.path))
 end
 
 local function bridge_update()
