@@ -21,6 +21,7 @@ local unpack_values = table.unpack or unpack
 local bridge_degraded = false
 local bridge_shutdown = false
 local send_line
+local pending_logs = {}
 local encode_json
 local emit_log_line
 local wrapped_callbacks = {}
@@ -305,19 +306,38 @@ end
 local function hook_print()
     print = function(...)
         original_print(...)
-        if not client then
-            return
-        end
 
         local parts = {}
         for i = 1, select("#", ...) do
             parts[i] = tostring(select(i, ...))
         end
 
-        send_line(encode_json({
+        local source_info = debug.getinfo(2, "Sl")
+        local source = nil
+        if source_info and source_info.source and source_info.source:sub(1, 1) == "@" then
+            source = source_info.source:sub(2)
+            if _G.__LOVE2D_PROJECT_PATH then
+                local prefix = _G.__LOVE2D_PROJECT_PATH
+                if source:sub(1, #prefix) == prefix then
+                    source = source:sub(#prefix + 2)
+                end
+            end
+            if source_info.currentline and source_info.currentline > 0 then
+                source = source .. ":" .. source_info.currentline
+            end
+        end
+
+        local payload = encode_json({
             type = "log",
-            data = table.concat(parts, "\t")
-        }) .. "\n")
+            data = table.concat(parts, "\t"),
+            source = source
+        }) .. "\n"
+
+        if client then
+            send_line(payload)
+        else
+            table.insert(pending_logs, payload)
+        end
     end
 end
 
@@ -453,6 +473,10 @@ local function bridge_update()
             client = accepted
             log("bridge client connected")
             log_proxy_error_mode()
+            for _, payload in ipairs(pending_logs) do
+                send_line(payload)
+            end
+            pending_logs = {}
         end
     end
 

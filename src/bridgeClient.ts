@@ -12,9 +12,10 @@ interface BridgeResponse {
     success?: boolean;
     data?: unknown;
     error?: string;
+    source?: string;
 }
 
-type BridgePrintLevel = 'ERROR' | 'WARN' | 'INFO' | 'TRACE';
+type BridgePrintLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'TRACE';
 interface InferredBridgePrint {
     level: BridgePrintLevel;
     message: string;
@@ -33,6 +34,7 @@ export class BridgeClient {
 
     constructor(
         private readonly logger: Logger,
+        private readonly appLogger: Logger,
         private readonly inferLogTypes = true
     ) { }
 
@@ -134,7 +136,7 @@ export class BridgeClient {
 
     private handleMessage(message: BridgeResponse): void {
         if (message.type === 'log') {
-            this.logBridgePrint(String(message.data));
+            this.logBridgePrint(String(message.data), message.source);
             return;
         }
 
@@ -174,25 +176,29 @@ export class BridgeClient {
         }
     }
 
-    private logBridgePrint(message: string): void {
+    private logBridgePrint(message: string, source?: string): void {
+        const logger = source ? this.appLogger.withSource(source) : this.appLogger;
         if (!this.inferLogTypes) {
-            this.logger.log(`bridge log: ${message}`);
+            logger.info(message);
             return;
         }
 
         const inferred = inferBridgePrint(message);
         switch (inferred.level) {
             case 'ERROR':
-                this.logger.error(inferred.message);
+                logger.error(inferred.message);
                 break;
             case 'WARN':
-                this.logger.warn(inferred.message);
+                logger.warn(inferred.message);
                 break;
             case 'INFO':
-                this.logger.info(inferred.message);
+                logger.info(inferred.message);
+                break;
+            case 'DEBUG':
+                logger.debug(inferred.message);
                 break;
             default:
-                this.logger.log(inferred.message);
+                logger.info(inferred.message);
                 break;
         }
     }
@@ -216,6 +222,11 @@ function inferBridgePrint(message: string): InferredBridgePrint {
     const infoMessage = stripLeadingKeyword(trimmed, lowered, 'info');
     if (infoMessage) {
         return { level: 'INFO', message: infoMessage };
+    }
+
+    const debugMessage = stripLeadingKeyword(trimmed, lowered, 'debug');
+    if (debugMessage) {
+        return { level: 'DEBUG', message: debugMessage };
     }
 
     return { level: 'TRACE', message };

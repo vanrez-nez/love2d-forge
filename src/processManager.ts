@@ -28,7 +28,7 @@ export class ProcessManager {
     ) {
         this.outputChannel = rootLogger.getOutputChannel();
         this.logger = rootLogger.child('process');
-        this.bridgeClient = new BridgeClient(rootLogger.child('bridge'), inferLogTypes);
+        this.bridgeClient = new BridgeClient(rootLogger.child('bridge'), rootLogger.child('app'), inferLogTypes);
     }
 
     public async launch(bootstrapDir: string, workspaceRoot: string, launchCwd: string, executablePath: string, reason: string): Promise<boolean> {

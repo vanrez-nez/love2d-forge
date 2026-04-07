@@ -11,7 +11,7 @@ A Zero-Friction Entry VS Code extension for Love2D projects that launches throug
 - **Flexible Watch Scopes**: Choose between watching only the active app folder or the entire project workspace.
 - **Process Management**: Integrated process control with stdout/stderr piped to the VS Code Output Channel.
 - **Visual Feedback**: Real-time status bar updates for running and stopped states.
-- **Granular Log Whitelisting**: Control exactly which logs appear in the console by whitelisting specific levels (e.g. `info`) or scope:level pairs (e.g. `bridge:info`).
+- **Granular Log Filtering**: Control exactly which logs appear in the output channel by scope (`app`, `bridge`), level (`info`, `warn`, `error`), or combinations (`app:warn`).
 
 ## Getting Started
 
@@ -52,7 +52,7 @@ Example:
   ],
   "watchScope": "project",
   "watchExclude": ["temp/**", "old_assets/**"],
-  "logFilter": ["info", "warn", "error", "bridge:trace"],
+  "logFilter": ["app", "bridge:warn"],
   "fileLogs": {
     "enabled": false,
     "outputFile": "love2d.log",
@@ -72,11 +72,58 @@ How it works:
   - `"location"` (Default): Only watches files inside the active app's folder.
   - `"project"`: Watches the entire workspace, useful for shared libraries.
 - `watchExclude` allows manual overrides to ignore specific files or folders. Note that **.gitignore** rules and internal extension files are always ignored automatically.
-- `logFilter` sets a whitelist for log events. It supports:
-  - **Levels**: `"info"`, `"warn"`, `"error"`, `"trace"`.
-  - **Scope Pairs**: `"bridge:info"`, `"process:trace"`.
-  - **Wildcard**: `"*"` (shows all logs).
-  - Default is `["info", "warn", "error"]` to exclude noisy internal app state.
+- `logFilter` sets a whitelist of rules that control which log lines are shown. Each rule is matched against the log's **scope** and **level**. Three forms are supported:
+
+  | Form | Example | Effect |
+  |---|---|---|
+  | Level only | `"info"` | Show `INFO` messages from **any** scope |
+  | Scope only | `"app"` | Show **all** levels from the `app` scope |
+  | Scope + Level | `"app:warn"` | Show only `WARN` from the `app` scope |
+  | Wildcard | `"*"` | Show everything |
+
+  **Scopes** in the output channel:
+  - `love2d:app` — `print()` calls from your Lua game code. Each line also shows the source file and line, e.g. `[love2d:app:main.lua:12]`, but only `app` is needed for filtering.
+  - `love2d:bridge` — Internal bridge lifecycle messages (connected, reloaded, errors).
+  - `love2d:process` — OS process management (spawning, stdout/stderr).
+  - `love2d:watcher` — File watcher events (change detected, reload triggered).
+  - `love2d:extension` — Extension lifecycle (status bar, config load).
+
+  **Log levels** (from noisiest to most critical): `trace`, `debug`, `info`, `warn`, `error`.
+
+  **`inferLogTypes`** classifies bridged `print()` calls by their message prefix:
+  - Messages starting with `error:` → logged as `ERROR`
+  - Messages starting with `warn:` or `warning:` → logged as `WARN`
+  - Messages starting with `info:` → logged as `INFO`
+  - Messages starting with `debug:` → logged as `DEBUG`
+  - Anything else → logged as `INFO`
+
+  **Common filter recipes:**
+
+  ```json
+  "logFilter": ["info", "warn", "error"]
+  ```
+  > Default. Shows all levels ≥ INFO from every scope.
+
+  ```json
+  "logFilter": ["app"]
+  ```
+  > Only your game's `print()` output. Hides all bridge/process/watcher noise.
+
+  ```json
+  "logFilter": ["app", "bridge:warn"]
+  ```
+  > Game prints at all levels + only warnings/errors from the bridge.
+
+  ```json
+  "logFilter": ["app:warn", "app:error"]
+  ```
+  > Only warnings and errors from your game. Suppress info-level prints.
+
+  ```json
+  "logFilter": ["*"]
+  ```
+  > Everything. Useful for debugging the extension itself.
+
 - `fileLogs` controls optional persisted output logging for the last N lines.
   - `enabled`: Toggles file logging.
   - `outputFile`: Path to the log file.

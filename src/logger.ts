@@ -27,7 +27,8 @@ export class Logger {
         private readonly scope: string,
         private readonly fileLogStore?: FileLogStore | null,
         clock?: LogClock,
-        filter?: LogFilter
+        filter?: LogFilter,
+        private readonly displayScope?: string
     ) {
         this.clock = clock ?? new LogClock();
         this.filter = filter ?? { rules: null };
@@ -101,10 +102,14 @@ export class Logger {
             return true;
         }
 
-        // 2. Scope:Level match (e.g., "bridge:info")
         const segments = this.scope.split(':');
         for (const segment of segments) {
+            // 2. Scope:Level match (e.g., "app:info")
             if (this.filter.rules.has(`${segment}:${level}`)) {
+                return true;
+            }
+            // 3. Scope-only match (e.g., "app" → allow all levels from that scope)
+            if (this.filter.rules.has(segment)) {
                 return true;
             }
         }
@@ -113,11 +118,16 @@ export class Logger {
     }
 
     public formatMessage(level: LogLevel, message: string): string {
-        return `${this.clock.formatPrefix()} [${this.scope}] ${level.toUpperCase()} ${message}`;
+        return `${this.clock.formatPrefix()} [${this.displayScope ?? this.scope}] ${level.toUpperCase()} ${message}`;
     }
 
     public child(scope: string): Logger {
         return new Logger(this.outputChannel, `${this.scope}:${scope}`, this.fileLogStore, this.clock, this.filter);
+    }
+
+    public withSource(source: string): Logger {
+        const display = `${this.scope}:${source}`;
+        return new Logger(this.outputChannel, this.scope, this.fileLogStore, this.clock, this.filter, display);
     }
 
     public getOutputChannel(): vscode.OutputChannel {
