@@ -25,6 +25,7 @@ export class BridgeClient {
     private socket: net.Socket | null = null;
     private buffer = '';
     private nextRequestId = 0;
+    private trafficLogger: Logger;
     private readonly pendingRequests = new Map<number, {
         resolve: (value: BridgeResponse) => void;
         reject: (reason: Error) => void;
@@ -36,7 +37,9 @@ export class BridgeClient {
         private readonly logger: Logger,
         private readonly appLogger: Logger,
         private readonly inferLogTypes = true
-    ) { }
+    ) {
+        this.trafficLogger = logger.child('traffic');
+    }
 
     public get connected(): boolean {
         return this._connected;
@@ -99,7 +102,7 @@ export class BridgeClient {
 
         const id = ++this.nextRequestId;
         const payload = JSON.stringify({ ...command, id }) + '\n';
-        this.logger.log(`bridge send: id=${id} payload="${payload.trim()}"`);
+        this.trafficLogger.log(`bridge send: id=${id} payload="${payload.trim()}"`);
 
         return new Promise<BridgeResponse>((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -121,12 +124,14 @@ export class BridgeClient {
             this.buffer = this.buffer.slice(newlineIndex + 1);
 
             if (line.length > 0) {
-                this.logger.log(`bridge receive: "${line}"`);
                 try {
                     const message = JSON.parse(line) as BridgeResponse;
+                    if (message.type !== 'log') {
+                        this.trafficLogger.log(`bridge receive: "${line}"`);
+                    }
                     this.handleMessage(message);
                 } catch {
-                    this.logger.debug(`bridge received malformed message: ${line}`);
+                    this.trafficLogger.debug(`bridge received malformed message: ${line}`);
                 }
             }
 
