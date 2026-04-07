@@ -91,26 +91,18 @@ export class FileWatcher {
     private isExcluded(relativePath: string): boolean {
         // ALWAYS IGNORE internal files, common noise, and gitignored files.
         // These have the highest authority and cannot be overridden.
-        const internalExcludes = [
-            '.love2d-forge/',
-            '.git/',
-            'node_modules/',
-            '.vscode/'
-        ];
+        // Always ignore our own log file and common patterns
+        if (relativePath.endsWith('.tmp') || 
+            this.options.watchExclude?.some(e => relativePath === e || relativePath.startsWith(`${e}/`))) {
+            return true;
+        }
 
+        const internalExcludes = ['.love2d-forge/', '.git/', 'node_modules/', '.vscode/'];
         if (internalExcludes.some(exclude => relativePath === exclude || relativePath.startsWith(exclude))) {
             return true;
         }
 
         if (this.gitignore && this.gitignore.ignores(relativePath)) {
-            return true;
-        }
-
-        // 1. check watchExclude
-        if (this.options.watchExclude?.some(exclude => {
-            const normalized = exclude.replace(/\\/g, '/').replace(/^\/+/, '');
-            return relativePath === normalized || relativePath.startsWith(`${normalized}/`);
-        })) {
             return true;
         }
 
