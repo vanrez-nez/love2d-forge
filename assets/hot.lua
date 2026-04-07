@@ -147,10 +147,12 @@ function encode_json(value)
     elseif t == "nil" then
         return "null"
     elseif t == "table" then
-        local is_array = #value > 0
+        local n = rawget(value, "n")
+        local is_array = n or #value > 0
         local parts = {}
         if is_array then
-            for i = 1, #value do
+            local count = n or #value
+            for i = 1, count do
                 parts[#parts + 1] = encode_json(value[i])
             end
             return "[" .. table.concat(parts, ",") .. "]"
@@ -307,9 +309,9 @@ local function hook_print()
     print = function(...)
         original_print(...)
 
-        local parts = {}
-        for i = 1, select("#", ...) do
-            parts[i] = tostring(select(i, ...))
+        local parts = { n = select("#", ...) }
+        for i = 1, parts.n do
+            parts[i] = select(i, ...)
         end
 
         local source_info = debug.getinfo(2, "Sl")
@@ -329,7 +331,7 @@ local function hook_print()
 
         local payload = encode_json({
             type = "log",
-            data = table.concat(parts, "\t"),
+            data = parts,
             source = source
         }) .. "\n"
 

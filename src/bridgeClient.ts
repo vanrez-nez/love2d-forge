@@ -1,4 +1,5 @@
 import * as net from 'net';
+import * as util from 'util';
 import { Logger } from './logger';
 
 interface BridgeCommand {
@@ -141,7 +142,7 @@ export class BridgeClient {
 
     private handleMessage(message: BridgeResponse): void {
         if (message.type === 'log') {
-            this.logBridgePrint(String(message.data), message.source);
+            this.logBridgePrint(message.data, message.source);
             return;
         }
 
@@ -181,7 +182,20 @@ export class BridgeClient {
         }
     }
 
-    private logBridgePrint(message: string, source?: string): void {
+    private logBridgePrint(data: unknown, source?: string): void {
+        this.logger.debug(`logBridgePrint received: ${typeof data} array=${Array.isArray(data)} contents=${JSON.stringify(data)}`);
+        let message = '';
+        if (Array.isArray(data)) {
+            message = data.map(part => {
+                if (typeof part === 'string') {
+                    return part;
+                }
+                return util.inspect(part, { depth: 3, sorted: true, compact: false, breakLength: 0 });
+            }).join('\t');
+        } else {
+            message = typeof data === 'object' && data !== null ? util.inspect(data, { depth: 3, sorted: true, compact: false, breakLength: 0 }) : String(data);
+        }
+
         const logger = source ? this.appLogger.withSource(source) : this.appLogger;
         if (!this.inferLogTypes) {
             logger.info(message);
