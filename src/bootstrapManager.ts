@@ -14,8 +14,8 @@ export class BootstrapManager {
         this.startupErrorFile = getStartupErrorFile(workspaceRoot);
     }
 
-    public prepare(appRoot: string, hotPollIntervalMs: number, proxyErrorLogs: boolean): string {
-        this.logger.log(`bootstrap prepare start: dir="${this.bootstrapDir}" hotPollIntervalMs=${hotPollIntervalMs} proxyErrorLogs=${proxyErrorLogs}`);
+    public prepare(workspaceRoot: string, appRoot: string, hotPollIntervalMs: number, proxyErrorLogs: boolean): string {
+        this.logger.log(`bootstrap prepare start: workspace="${workspaceRoot}" app="${appRoot}" hotPollIntervalMs=${hotPollIntervalMs} proxyErrorLogs=${proxyErrorLogs}`);
         fs.mkdirSync(this.bootstrapDir, { recursive: true });
 
         const projectPath = appRoot.replace(/\\/g, '/');
@@ -34,6 +34,7 @@ export class BootstrapManager {
             path.join(this.bootstrapDir, 'main.lua'),
             mainTemplate
                 .replace('__PROJECT_PATH__', projectPath)
+                .replace('__WORKSPACE_PATH__', workspaceRoot.replace(/\\/g, '/'))
                 .replace('__BRIDGE_PORT_FILE__', this.bridgePortFile.replace(/\\/g, '/'))
                 .replace('__STARTUP_ERROR_FILE__', this.startupErrorFile.replace(/\\/g, '/'))
                 .replace('__PROXY_ERROR_LOGS__', proxyErrorLogs ? 'true' : 'false')
