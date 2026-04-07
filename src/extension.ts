@@ -91,6 +91,7 @@ export async function activate(context: vscode.ExtensionContext) {
         activeEntryPoint = candidate;
         activationLogger.info(describeEntryPointSelection(candidate, selectionMode));
 
+        fileLogStore?.setActive(true);
         // Update watcher for the new app/config
         if (watcher) {
             watcher.dispose();
@@ -131,6 +132,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const stop = async () => {
         activationLogger.log('manual stop requested');
+        fileLogStore?.setActive(false);
         await processManager.stop();
         activeEntryPoint = undefined;
         statusBar.update(ExtensionState.Stopped);
@@ -139,6 +141,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     processManager.onCrash = () => {
         activeEntryPoint = undefined;
+        fileLogStore?.setActive(false);
         statusBar.update(ExtensionState.Stopped);
         activationLogger.log('process crash handler invoked; status bar updated to stopped');
         vscode.window.showWarningMessage('Love2D stopped unexpectedly. I can try to restart it.', 'Restart')

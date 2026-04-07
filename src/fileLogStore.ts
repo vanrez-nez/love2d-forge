@@ -5,13 +5,21 @@ export class FileLogStore {
     private readonly lines: string[] = [];
     private flushTimer: NodeJS.Timeout | null = null;
     private partialLine = '';
+    private isActive = false;
 
     constructor(
         private readonly filePath: string,
         private readonly maxLines = 1000
     ) {}
 
+    public setActive(active: boolean): void {
+        this.isActive = active;
+    }
+
     public write(line: string): void {
+        if (!this.isActive) {
+            return;
+        }
         this.lines.push(line);
         if (this.lines.length > this.maxLines) {
             this.lines.splice(0, this.lines.length - this.maxLines);
@@ -20,7 +28,7 @@ export class FileLogStore {
     }
 
     public appendChunk(chunk: string): void {
-        if (!chunk) {
+        if (!chunk || !this.isActive) {
             return;
         }
 
