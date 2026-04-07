@@ -12,7 +12,7 @@
  *   node scripts/publish.mjs --target=all --pat=... --token=...
  */
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { readFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 
 const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
@@ -32,8 +32,13 @@ const target = getArg('target') || 'all';
 const pat = getArg('pat') || process.env.VSCE_PAT;
 const token = getArg('token') || process.env.OVSX_TOKEN;
 
+const results = {
+    marketplace: { status: 'Skipped', message: 'Not targeted' },
+    ovsx: { status: 'Skipped', message: 'Not targeted' }
+};
+
 async function checkMarketplace() {
-    console.log(`Checking VS Marketplace for ${extensionId}@${version}...`);
+    console.log(`🔍 Checking VS Marketplace for ${extensionId}@${version}...`);
     try {
         const output = execSync(`npx vsce show ${extensionId} --json`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
         const data = JSON.parse(output);
@@ -45,14 +50,10 @@ async function checkMarketplace() {
 }
 
 async function checkOVSX() {
-    console.log(`Checking Open VSX for ${extensionId}@${version}...`);
+    console.log(`🔍 Checking Open VSX for ${extensionId}@${version}...`);
     try {
-        // ovsx get --metadata returns JSON or errors out if not found
         const output = execSync(`npx ovsx get ${extensionId} --metadata`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-        // Since ovsx show --json didn't work previously, we check if version is in the output
-        // The output of 'ovsx get --metadata' contains the full metadata JSON
         const data = JSON.parse(output);
-        // data.allVersions is usually an array of objects
         const exists = data.allVersions?.[version] !== undefined || data.version === version;
         return exists;
     } catch (e) {
@@ -60,51 +61,75 @@ async function checkOVSX() {
     }
 }
 
+function writeGithubSummary(text) {
+    const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+    if (summaryFile) {
+        try {
+            appendFileSync(summaryFile, text + '\n');
+        } catch (err) {
+            console.error('Failed to write to GITHUB_STEP_SUMMARY:', err.message);
+        }
+    }
+}
+
 async function run() {
     const checkMS = (target === 'all' || target === 'marketplace');
     const checkVSX = (target === 'all' || target === 'ovsx');
 
-    let needsMS = false;
-    let needsVSX = false;
-
     if (checkMS) {
-        const existsMS = await checkMarketplace();
-        if (existsMS) {
-            console.log(`✅ Version ${version} already exists on VS Marketplace. Skipping.`);
+        const exists = await checkMarketplace();
+        if (exists) {
+            console.log(`✅ Version ${version} already exists on VS Marketplace.`);
+            results.marketplace = { status: 'Skipped', message: 'Already published' };
         } else {
-            console.log(`⚠️ Version ${version} is missing on VS Marketplace.`);
-            needsMS = true;
+            console.log(`🚀 Publishing to VS Marketplace...`);
+            try {
+                const cmd = `npx vsce publish ${pat ? `-p ${pat}` : ''}`;
+                execSync(cmd, { stdio: 'inherit' });
+                results.marketplace = { status: 'Success', message: `Published version ${version}` };
+            } catch (err) {
+                results.marketplace = { status: 'Failed', message: err.message };
+                throw err;
+            }
         }
     }
 
     if (checkVSX) {
-        const existsVSX = await checkOVSX();
-        if (existsVSX) {
-            console.log(`✅ Version ${version} already exists on Open VSX. Skipping.`);
+        const exists = await checkOVSX();
+        if (exists) {
+            console.log(`✅ Version ${version} already exists on Open VSX.`);
+            results.ovsx = { status: 'Skipped', message: 'Already published' };
         } else {
-            console.log(`⚠️ Version ${version} is missing on Open VSX.`);
-            needsVSX = true;
+            console.log(`🚀 Publishing to Open VSX...`);
+            try {
+                const cmd = `npx ovsx publish ${token ? `--token ${token}` : ''}`;
+                execSync(cmd, { stdio: 'inherit' });
+                results.ovsx = { status: 'Success', message: `Published version ${version}` };
+            } catch (err) {
+                results.ovsx = { status: 'Failed', message: err.message };
+                throw err;
+            }
         }
     }
 
-    if (needsMS) {
-        console.log(`Publishing to VS Marketplace...`);
-        const cmd = `npx vsce publish ${pat ? `-p ${pat}` : ''}`;
-        execSync(cmd, { stdio: 'inherit' });
-    }
+    console.log('\n--- Publishing Summary ---');
+    console.table(results);
 
-    if (needsVSX) {
-        console.log(`Publishing to Open VSX...`);
-        const cmd = `npx ovsx publish ${token ? `--token ${token}` : ''}`;
-        execSync(cmd, { stdio: 'inherit' });
-    }
+    const summaryMd = `### 📦 Release Summary (${version})
+| Registry | Status | Details |
+| :--- | :--- | :--- |
+| VS Marketplace | ${results.marketplace.status === 'Success' ? '✅' : (results.marketplace.status === 'Skipped' ? '⚪' : '❌')} ${results.marketplace.status} | ${results.marketplace.message} |
+| Open VSX | ${results.ovsx.status === 'Success' ? '✅' : (results.ovsx.status === 'Skipped' ? '⚪' : '❌')} ${results.ovsx.status} | ${results.ovsx.message} |
+`;
+    writeGithubSummary(summaryMd);
 
-    if (!needsMS && !needsVSX) {
-        console.log('✨ Everything is in sync. No publishing required.');
+    if (results.marketplace.status === 'Skipped' && results.ovsx.status === 'Skipped') {
+        process.stdout.write('✨ Everything is already in sync.\n');
     }
 }
 
 run().catch(err => {
-    console.error('❌ Publish failed:', err.message);
+    console.error('\n❌ Publish failed during execution.');
+    console.table(results);
     process.exit(1);
 });
